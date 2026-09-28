@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { FlipHorizontal, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 
@@ -10,6 +10,7 @@ interface CameraViewProps {
   startCamera: () => void;
   isSimulated: boolean;
   toggleSimulationMode: () => void;
+  syncVideoRef?: (video: HTMLVideoElement | null) => void;
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({
@@ -20,15 +21,28 @@ export const CameraView: React.FC<CameraViewProps> = ({
   startCamera,
   isSimulated,
   toggleSimulationMode,
+  syncVideoRef,
 }) => {
   const { isMirrored, toggleMirror, captureState, countdownValue, currentPoseIndex } =
     useBoothStore();
+
+  // Re-bind media stream to video element on component mount (e.g. Back from Studio)
+  useEffect(() => {
+    if (videoRef.current && syncVideoRef) {
+      syncVideoRef(videoRef.current);
+    }
+  }, [videoRef, syncVideoRef]);
 
   return (
     <div className="relative w-full h-full rounded-3xl overflow-hidden bg-stone-900 border border-black/10 shadow-soft-lg flex items-center justify-center">
       {/* HTML5 Live Video Feed */}
       <video
-        ref={videoRef}
+        ref={(el) => {
+          (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el;
+          if (el && syncVideoRef) {
+            syncVideoRef(el);
+          }
+        }}
         autoPlay
         playsInline
         muted
@@ -128,17 +142,20 @@ export const CameraView: React.FC<CameraViewProps> = ({
             <AlertCircle className="w-7 h-7" />
           </div>
           <h3 className="text-base font-semibold">Camera Access Required</h3>
-          <p className="text-xs text-stone-400 mt-1.5 max-w-sm">
-            {error}. Allow camera permissions in your browser or enable our interactive studio simulation.
+          <p className="text-xs text-stone-300 mt-2 max-w-md leading-relaxed">
+            {error}
+          </p>
+          <p className="text-[11px] text-stone-400 mt-1 max-w-sm">
+            Pastikan aplikasi lain yang memakai webcam (Zoom, OBS, Teams, Windows Camera, atau tab lain) sudah ditutup, lalu klik Coba Lagi.
           </p>
 
-          <div className="flex items-center gap-3 mt-6">
+          <div className="flex items-center gap-3 mt-5">
             <button
               type="button"
               onClick={startCamera}
-              className="px-4 py-2 rounded-xl bg-white text-studio-graphite text-xs font-semibold hover:bg-stone-100 transition-colors"
+              className="px-4 py-2 rounded-xl bg-white text-studio-graphite text-xs font-semibold hover:bg-stone-100 transition-colors shadow-soft"
             >
-              Retry Camera
+              Coba Lagi Kamera
             </button>
             <button
               type="button"

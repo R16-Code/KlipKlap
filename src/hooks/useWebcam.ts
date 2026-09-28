@@ -8,6 +8,7 @@ interface UseWebcamReturn {
   hasPermission: boolean;
   startCamera: () => Promise<void>;
   stopCamera: () => void;
+  syncVideoRef: (video: HTMLVideoElement | null) => void;
   captureFrame: (isMirrored: boolean, targetRatio?: number) => string | null;
   isSimulated: boolean;
   toggleSimulationMode: () => void;
@@ -15,6 +16,9 @@ interface UseWebcamReturn {
 
 export function useWebcam(): UseWebcamReturn {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isMountedRef = useRef(true);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,22 +26,36 @@ export function useWebcam(): UseWebcamReturn {
   const [isSimulated, setIsSimulated] = useState(false);
 
   const stopCamera = useCallback(() => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      });
+      streamRef.current = null;
     }
+    setStream(null);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  }, [stream]);
+  }, []);
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     // Stop existing stream if any
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      });
+      streamRef.current = null;
     }
 
     try {
@@ -45,44 +63,68 @@ export function useWebcam(): UseWebcamReturn {
         throw new Error('Camera API is not supported in this browser environment.');
       }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1920, min: 640 },
-          height: { ideal: 1080, min: 480 },
-          facingMode: 'user',
-        },
-        audio: false,
-      });
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+          },
+          audio: false,
+        });
+      } catch {
+        // Fallback to basic video constraint if ideal constraints fail on specific hardware
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
 
+      // If component unmounted while awaiting getUserMedia (React Strict Mode safeguard)
+      if (!isMountedRef.current) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      streamRef.current = mediaStream;
       setStream(mediaStream);
       setHasPermission(true);
       setIsSimulated(false);
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        await videoRef.current.play().catch(() => {
-          // Autoplay was prevented or interrupted
-        });
+        await videoRef.current.play().catch(() => {});
       }
       setIsLoading(false);
     } catch (err: unknown) {
       console.warn('Webcam access error, offering fallback simulation:', err);
-      const message = err instanceof Error ? err.message : 'Unable to access camera';
+      let message = 'Unable to access camera';
+      if (err instanceof Error) {
+        if (err.name === 'NotReadableError' || err.message.toLowerCase().includes('in use')) {
+          message = 'Device in use. Kamera laptop sedang digunakan oleh aplikasi lain (seperti Zoom, OBS, Teams, Windows Camera, atau tab browser lain).';
+        } else if (err.name === 'NotAllowedError') {
+          message = 'Permission denied. Izin akses kamera belum diberikan di browser.';
+        } else {
+          message = err.message;
+        }
+      }
       setError(message);
       setIsLoading(false);
       setHasPermission(false);
     }
-  }, [stream]);
+  }, []);
 
-  // Initial camera startup
+  // Initial camera startup with React Strict Mode safeguard
   useEffect(() => {
+    isMountedRef.current = true;
     startCamera();
 
     return () => {
+      isMountedRef.current = false;
       stopCamera();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startCamera, stopCamera]);
 
   // Sync stream to video element whenever ref attaches
   useEffect(() => {
@@ -183,6 +225,9 @@ export function useWebcam(): UseWebcamReturn {
     renderSimulation();
 
     const mockStream = canvas.captureStream(30);
+    streamRef.current = mockStream;
+    setStream(mockStream);
+
     if (videoRef.current) {
       videoRef.current.srcObject = mockStream;
       videoRef.current.play().catch(() => {});
@@ -191,8 +236,33 @@ export function useWebcam(): UseWebcamReturn {
     return () => {
       cancelAnimationFrame(animationId);
       mockStream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current === mockStream) {
+        streamRef.current = null;
+      }
     };
   }, [isSimulated]);
+
+  /**
+   * Immediately re-binds active media stream to newly mounted video DOM element.
+   * Prevents black screen when navigating between Booth and Studio!
+   */
+  const syncVideoRef = useCallback(
+    (video: HTMLVideoElement | null) => {
+      if (!video) return;
+      videoRef.current = video;
+
+      const activeStream = streamRef.current;
+      if (activeStream && activeStream.active) {
+        if (video.srcObject !== activeStream) {
+          video.srcObject = activeStream;
+        }
+        video.play().catch(() => {});
+      } else if (!isSimulated) {
+        startCamera();
+      }
+    },
+    [isSimulated, startCamera]
+  );
 
   const toggleSimulationMode = useCallback(() => {
     setIsSimulated((prev) => {
@@ -285,6 +355,7 @@ export function useWebcam(): UseWebcamReturn {
     hasPermission,
     startCamera,
     stopCamera,
+    syncVideoRef,
     captureFrame,
     isSimulated,
     toggleSimulationMode,
