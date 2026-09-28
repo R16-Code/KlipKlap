@@ -6,8 +6,9 @@ import type {
   CaptureState,
   CapturedPhoto,
   StudioSettings,
+  FrameOption,
+  SlotCalibration,
 } from '../types';
-import { LAYOUT_CONFIGS } from '../utils/constants';
 
 interface BoothState {
   // Navigation
@@ -45,16 +46,29 @@ interface BoothState {
   // Studio customization
   selectedFrame: string;
   setSelectedFrame: (frameId: string) => void;
+  customFrames: FrameOption[];
+  addCustomFrame: (frame: FrameOption) => void;
+  removeCustomFrame: (id: string) => void;
   selectedFilter: FilterType;
   setSelectedFilter: (filter: FilterType) => void;
   studioSettings: StudioSettings;
   updateStudioSettings: (settings: Partial<StudioSettings>) => void;
+  updateSlotCalibration: (cal: Partial<SlotCalibration>) => void;
+  resetSlotCalibration: () => void;
 }
+
+const DEFAULT_CALIBRATION: SlotCalibration = {
+  marginTopOffset: 0,
+  gapOffset: 0,
+  scaleFactor: 1,
+  marginSideOffset: 0,
+};
 
 const DEFAULT_SETTINGS: StudioSettings = {
   title: 'KLIPKLAP STUDIO',
   subtitle: 'SELF PHOTO ARCHIVE',
   showDate: true,
+  slotCalibration: DEFAULT_CALIBRATION,
 };
 
 export const useBoothStore = create<BoothState>((set, get) => ({
@@ -63,15 +77,8 @@ export const useBoothStore = create<BoothState>((set, get) => ({
 
   layout: 'strip_1x4',
   setLayout: (layout) => {
-    const config = LAYOUT_CONFIGS[layout];
-    const currentPhotos = get().capturedPhotos;
-    // Trim photos if changing to layout with fewer slots
-    const trimmed = currentPhotos.slice(0, config.photoCount);
-    set({
-      layout,
-      capturedPhotos: trimmed,
-      currentPoseIndex: Math.min(get().currentPoseIndex, config.photoCount - 1),
-    });
+    // Preserve all captured photos so switching layouts (e.g. 1x4 -> 1x2 -> 1x4) never loses photos!
+    set({ layout });
   },
 
   isMirrored: true,
@@ -129,6 +136,18 @@ export const useBoothStore = create<BoothState>((set, get) => ({
   selectedFrame: 'cloud_white',
   setSelectedFrame: (frameId) => set({ selectedFrame: frameId }),
 
+  customFrames: [],
+  addCustomFrame: (frame) =>
+    set((state) => ({
+      customFrames: [frame, ...state.customFrames],
+      selectedFrame: frame.id,
+    })),
+  removeCustomFrame: (id) =>
+    set((state) => ({
+      customFrames: state.customFrames.filter((f) => f.id !== id),
+      selectedFrame: state.selectedFrame === id ? 'cloud_white' : state.selectedFrame,
+    })),
+
   selectedFilter: 'normal',
   setSelectedFilter: (filter) => set({ selectedFilter: filter }),
 
@@ -136,5 +155,22 @@ export const useBoothStore = create<BoothState>((set, get) => ({
   updateStudioSettings: (settings) =>
     set((state) => ({
       studioSettings: { ...state.studioSettings, ...settings },
+    })),
+  updateSlotCalibration: (cal) =>
+    set((state) => ({
+      studioSettings: {
+        ...state.studioSettings,
+        slotCalibration: {
+          ...state.studioSettings.slotCalibration,
+          ...cal,
+        },
+      },
+    })),
+  resetSlotCalibration: () =>
+    set((state) => ({
+      studioSettings: {
+        ...state.studioSettings,
+        slotCalibration: DEFAULT_CALIBRATION,
+      },
     })),
 }));

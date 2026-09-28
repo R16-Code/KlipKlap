@@ -41,6 +41,7 @@ export const App: React.FC = () => {
                   startCamera={webcam.startCamera}
                   isSimulated={webcam.isSimulated}
                   toggleSimulationMode={webcam.toggleSimulationMode}
+                  syncVideoRef={webcam.syncVideoRef}
                 />
               </div>
 

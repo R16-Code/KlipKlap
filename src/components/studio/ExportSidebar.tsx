@@ -9,6 +9,7 @@ export const ExportSidebar: React.FC = () => {
     capturedPhotos,
     layout,
     selectedFrame,
+    customFrames,
     selectedFilter,
     studioSettings,
     updateStudioSettings,
@@ -24,14 +25,19 @@ export const ExportSidebar: React.FC = () => {
 
     try {
       setIsExporting(true);
-      await downloadHighResPhotostrip({
-        photos: capturedPhotos,
-        layout,
-        frameId: selectedFrame,
-        filter: selectedFilter,
-        settings: studioSettings,
-        scale: 2.5, // 300 DPI high-res scale
-      });
+      const activeCustomFrame = customFrames.find((f) => f.id === selectedFrame);
+      await downloadHighResPhotostrip(
+        {
+          photos: capturedPhotos,
+          layout,
+          frameId: selectedFrame,
+          customFrame: activeCustomFrame,
+          filter: selectedFilter,
+          settings: studioSettings,
+          scale: 2.5, // 300 DPI high-res scale
+        },
+        'png'
+      );
 
       setDownloadSuccess(true);
       confetti({
@@ -133,14 +139,14 @@ export const ExportSidebar: React.FC = () => {
         </div>
 
         {/* Paper Quality Specs Info Card */}
-        <div className="p-3.5 rounded-2xl bg-studio-oat/60 border border-stone-200/60 space-y-1.5">
+        <div className="p-3 rounded-2xl bg-studio-oat/60 border border-stone-200/60 space-y-1.5">
           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700">
             <span>Format</span>
-            <span className="font-mono text-stone-500">Lossless PNG</span>
+            <span className="font-mono text-stone-500">Lossless 300 DPI</span>
           </div>
           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700">
-            <span>Resolution</span>
-            <span className="font-mono text-stone-500">300 DPI Print Ready</span>
+            <span>Border Line</span>
+            <span className="text-emerald-700 font-medium">Included (Always Visible)</span>
           </div>
           <div className="flex items-center justify-between text-[11px] font-semibold text-stone-700">
             <span>Paper Tone</span>
@@ -175,7 +181,7 @@ export const ExportSidebar: React.FC = () => {
           ) : (
             <>
               <Download className="w-4 h-4" />
-              <span>Download High-Res PNG</span>
+              <span>Download High-Res</span>
             </>
           )}
         </button>

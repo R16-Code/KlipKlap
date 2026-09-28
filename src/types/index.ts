@@ -25,14 +25,22 @@ export interface FilterOption {
   isPro?: boolean;
 }
 
+export type FrameCategory = 'solid' | 'retro' | 'cute' | 'custom';
+
 export interface FrameOption {
   id: string;
   name: string;
+  category: FrameCategory;
   color: string;
   textColor: string;
   subtextColor: string;
+  borderColor?: string;
+  emoji?: string;
   isPro?: boolean;
-  borderPreviewClass: string;
+  borderPreviewClass?: string;
+  tagline?: string;
+  isCustom?: boolean;
+  customImageUrl?: string; // Data URL or object URL of uploaded custom frame template from Canva/Figma
 }
 
 export type AppStep = 'booth' | 'studio';
@@ -46,9 +54,18 @@ export interface CapturedPhoto {
   timestamp: number;
 }
 
+export interface SlotCalibration {
+  marginTopOffset: number; // in pixels, e.g. -30 to +30
+  gapOffset: number; // in pixels, e.g. -10 to +25
+  scaleFactor: number; // scale multiplier, e.g. 0.85 to 1.15
+  marginSideOffset: number; // in pixels, e.g. -20 to +20
+}
+
 export interface StudioSettings {
   title: string;
   subtitle: string;
   showDate: boolean;
-  showStickers?: boolean;
+  showOuterBorder?: boolean;
+  exportFormat?: 'png' | 'jpeg';
+  slotCalibration: SlotCalibration;
 }
