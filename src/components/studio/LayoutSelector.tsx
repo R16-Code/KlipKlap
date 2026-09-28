@@ -1,10 +1,11 @@
 import React from 'react';
+import { Camera, RotateCcw, AlertCircle } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
-import { LAYOUT_CONFIGS } from '../../utils/constants';
+import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
 import type { LayoutType } from '../../types';
 
 export const LayoutSelector: React.FC = () => {
-  const { layout, setLayout } = useBoothStore();
+  const { layout, setLayout, capturedPhotos, setCurrentStep } = useBoothStore();
 
   const layoutKeys: LayoutType[] = [
     'strip_1x4',
@@ -16,6 +17,11 @@ export const LayoutSelector: React.FC = () => {
     'polaroid_1x1',
   ];
 
+  const currentConfig = LAYOUT_CONFIGS[layout];
+  const missingCount = currentConfig.photoCount - capturedPhotos.length;
+  const isCurrentIncomplete = missingCount > 0;
+  const fittingLayout = getFittingLayout(capturedPhotos.length);
+
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-between">
@@ -23,7 +29,7 @@ export const LayoutSelector: React.FC = () => {
           Studio Layout
         </label>
         <span className="text-[11px] text-stone-600 font-medium">
-          {LAYOUT_CONFIGS[layout].name}
+          {currentConfig.name}
         </span>
       </div>
 
@@ -31,13 +37,14 @@ export const LayoutSelector: React.FC = () => {
         {layoutKeys.map((key) => {
           const config = LAYOUT_CONFIGS[key];
           const isSelected = layout === key;
+          const diff = config.photoCount - capturedPhotos.length;
 
           return (
             <button
               key={key}
               type="button"
               onClick={() => setLayout(key)}
-              className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+              className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between relative ${
                 isSelected
                   ? 'border-studio-graphite bg-white shadow-soft ring-1 ring-studio-graphite/20'
                   : 'border-stone-200/80 bg-stone-50/60 hover:bg-white hover:border-stone-300'
@@ -94,14 +101,62 @@ export const LayoutSelector: React.FC = () => {
                 <p className="text-xs font-semibold text-studio-graphite leading-tight truncate">
                   {config.name}
                 </p>
-                <p className="text-[10px] text-stone-600 mt-0.5 font-medium">
-                  {config.photoCount} cuts
-                </p>
+                <div className="flex items-center justify-between mt-0.5">
+                  <p className="text-[10px] text-stone-600 font-medium">
+                    {config.photoCount} cuts
+                  </p>
+                  {diff > 0 && (
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-medium">
+                      +{diff} foto
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           );
         })}
       </div>
+
+      {/* Interactive Alert if Selected Layout has Missing Photos */}
+      {isCurrentIncomplete && (
+        <div className="p-3 rounded-2xl bg-amber-50/90 border border-amber-200/90 space-y-2 mt-2 shadow-soft-sm">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-snug">
+              <span className="font-bold text-amber-950 block">
+                Perlu {missingCount} Foto Tambahan
+              </span>
+              <p className="text-amber-800 text-[10px] mt-0.5 leading-relaxed">
+                Anda baru mengambil {capturedPhotos.length} foto, sedangkan layout ini butuh {currentConfig.photoCount} foto.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-1">
+            {/* Action 1: Add photos in Live Capture */}
+            <button
+              type="button"
+              onClick={() => setCurrentStep('booth')}
+              className="w-full py-1.5 px-2.5 rounded-xl bg-studio-charcoal text-white hover:bg-black text-[11px] font-semibold flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            >
+              <Camera className="w-3.5 h-3.5 text-amber-300" />
+              <span>Ambil {missingCount} Foto Lagi (Live Capture)</span>
+            </button>
+
+            {/* Action 2: Switch back to matching layout */}
+            {fittingLayout && fittingLayout !== layout && (
+              <button
+                type="button"
+                onClick={() => setLayout(fittingLayout)}
+                className="w-full py-1.5 px-2.5 rounded-xl bg-white border border-amber-300/90 text-amber-900 hover:bg-amber-100/70 text-[11px] font-semibold flex items-center justify-center gap-1.5 shadow-soft-sm active:scale-95 transition-all"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                <span>Gunakan Layout {LAYOUT_CONFIGS[fittingLayout].name} ({capturedPhotos.length} Foto)</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

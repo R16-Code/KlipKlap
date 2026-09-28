@@ -92,19 +92,20 @@ export const Header: React.FC = () => {
 
         <div className="w-[1px] h-5 bg-stone-200" />
 
-        {/* Reset Session */}
+        {/* New Session Button */}
         <button
           type="button"
           onClick={() => {
-            if (capturedPhotos.length === 0 || window.confirm('Start a fresh photobooth session? Current photos will be cleared.')) {
+            if (capturedPhotos.length === 0 || window.confirm('Mulai sesi photobooth baru? Seluruh foto saat ini akan dibersihkan.')) {
               resetSession();
             }
           }}
-          className="p-2 rounded-xl text-stone-500 hover:text-studio-graphite hover:bg-white border border-transparent hover:border-stone-200 transition-all"
-          title="Restart Session"
-          aria-label="Restart Session"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-stone-600 hover:text-studio-graphite bg-white hover:bg-stone-50 border border-stone-200/90 shadow-soft-sm hover:shadow transition-all text-xs font-semibold active:scale-95"
+          title="Mulai Sesi Photobooth Baru"
+          aria-label="New Session"
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
+          <span>New Session</span>
         </button>
       </div>
     </header>

@@ -66,6 +66,18 @@ export const LAYOUT_CONFIGS: Record<LayoutType, LayoutConfig> = {
   },
 };
 
+/**
+ * Returns the layout configuration that best fits the exact number of photos taken
+ */
+export function getFittingLayout(photoCount: number): LayoutType {
+  if (photoCount <= 1) return 'polaroid_1x1';
+  if (photoCount === 2) return 'strip_1x2';
+  if (photoCount === 3) return 'strip_1x3';
+  if (photoCount === 4 || photoCount === 5) return 'strip_1x4';
+  if (photoCount >= 6 && photoCount < 9) return 'grid_2x3';
+  return 'grid_3x3';
+}
+
 export const FRAME_OPTIONS: FrameOption[] = [
   // --- Category 1: Minimalist Solid ---
   {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
+import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { downloadHighResPhotostrip } from '../../utils/canvasComposer';
+import { LAYOUT_CONFIGS } from '../../utils/constants';
 import confetti from 'canvas-confetti';
 
 export const ExportSidebar: React.FC = () => {
@@ -19,8 +20,19 @@ export const ExportSidebar: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
+  const layoutConfig = LAYOUT_CONFIGS[layout];
+  const requiredPhotos = layoutConfig.photoCount;
+  const isIncomplete = capturedPhotos.length < requiredPhotos;
+
   const handleDownload = async () => {
     if (isExporting || capturedPhotos.length === 0) return;
+
+    if (isIncomplete) {
+      const proceed = window.confirm(
+        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto (masih kurang ${requiredPhotos - capturedPhotos.length} foto).\n\nTetap download sekarang dengan slot kosong?`
+      );
+      if (!proceed) return;
+    }
 
     try {
       setIsExporting(true);
@@ -79,32 +91,39 @@ export const ExportSidebar: React.FC = () => {
             <span>Strip Stamp Text</span>
           </label>
 
-          <div className="space-y-2">
-            <div>
-              <span className="text-[10px] font-semibold text-stone-600 uppercase">
-                Studio Title
+          <div className="space-y-2.5">
+            {/* Watermark Studio Brand Title (Default & Non-Editable) */}
+            <div className="p-2.5 rounded-xl bg-stone-50/80 border border-stone-200/80 flex items-center justify-between">
+              <div>
+                <span className="text-[9.5px] font-semibold text-stone-500 uppercase tracking-wider block">
+                  Studio Title (Watermark)
+                </span>
+                <span className="text-xs font-bold text-studio-graphite tracking-wider font-sans">
+                  KLIPKLAP STUDIO
+                </span>
+              </div>
+              <span className="text-[9px] px-2 py-0.5 rounded-md bg-stone-200/80 text-stone-600 font-semibold uppercase tracking-wider">
+                Default
               </span>
-              <input
-                type="text"
-                value={studioSettings.title}
-                onChange={(e) => updateStudioSettings({ title: e.target.value.toUpperCase() })}
-                placeholder="KLIPKLAP STUDIO"
-                maxLength={24}
-                className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-semibold text-studio-graphite focus:outline-none focus:ring-1 focus:ring-studio-graphite tracking-wider"
-              />
             </div>
 
+            {/* Subtitle Archive (Editable) */}
             <div>
-              <span className="text-[10px] font-semibold text-stone-600 uppercase">
-                Subtitle Archive
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-stone-600 uppercase">
+                  Subtitle Archive
+                </span>
+                <span className="text-[10px] text-stone-500 font-mono">
+                  {studioSettings.subtitle.length}/28
+                </span>
+              </div>
               <input
                 type="text"
                 value={studioSettings.subtitle}
                 onChange={(e) => updateStudioSettings({ subtitle: e.target.value.toUpperCase() })}
                 placeholder="SELF PHOTO ARCHIVE"
                 maxLength={28}
-                className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-studio-graphite tracking-wide"
+                className="w-full mt-1 px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-700 focus:outline-none focus:ring-1 focus:ring-studio-graphite tracking-wide font-medium"
               />
             </div>
 
@@ -167,6 +186,14 @@ export const ExportSidebar: React.FC = () => {
 
       {/* Action Buttons */}
       <div className="pt-3 border-t border-stone-200/60 space-y-2 mt-3">
+        {/* Warning if photos incomplete */}
+        {isIncomplete && (
+          <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-800 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Slot foto belum lengkap ({capturedPhotos.length}/{requiredPhotos})</span>
+          </div>
+        )}
+
         {/* Download Button */}
         <button
           type="button"
@@ -211,28 +238,15 @@ export const ExportSidebar: React.FC = () => {
           <span>Selesai & Hapus Semua Foto</span>
         </button>
 
-        {/* Secondary Navigation */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        {/* Secondary Navigation: Back to Booth */}
+        <div className="pt-1">
           <button
             type="button"
             onClick={() => setCurrentStep('booth')}
-            className="py-2.5 px-3 rounded-xl border border-stone-200 text-stone-600 hover:text-studio-graphite hover:bg-stone-50 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+            className="w-full py-2.5 px-3 rounded-xl border border-stone-200 text-stone-600 hover:text-studio-graphite hover:bg-stone-50 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-soft-sm active:scale-95"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Booth</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('Start a fresh photobooth session?')) {
-                resetSession();
-              }
-            }}
-            className="py-2.5 px-3 rounded-xl border border-stone-200 text-stone-600 hover:text-studio-graphite hover:bg-stone-50 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>New Session</span>
           </button>
         </div>
       </div>
