@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-milk: #FBFBFA;
+    --color-oat: #F5F3ED;
+    --color-graphite: #262626;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #FBFBFA;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #262626;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  /* Subtle glassmorphism */
+  .glass-panel {
+    background: rgba(251, 251, 250, 0.78);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: 0 10px 30px -5px rgba(38, 38, 38, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(38, 38, 38, 0.06);
+    box-shadow: 0 4px 16px -2px rgba(38, 38, 38, 0.04);
+  }
+
+  .glass-subtle {
+    background: rgba(245, 243, 237, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(38, 38, 38, 0.05);
+  }
+
+  /* Custom scrollbar hiding */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* CSS Filters for studio preview */
+.filter-normal {
+  filter: contrast(1.02) saturate(1.03);
+}
+
+.filter-bw {
+  filter: grayscale(1) contrast(1.18) brightness(0.98);
+}
+
+.filter-sepia {
+  filter: sepia(0.38) saturate(1.1) contrast(0.98) brightness(1.02);
+}
+
+.filter-grain {
+  filter: contrast(1.12) saturate(0.85) brightness(1.04);
+}
+
+/* Noise overlay for vintage grain effect */
+.vintage-grain-overlay {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.08) 1px, transparent 0);
+  background-size: 3px 3px;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* Shutter Flash Animation */
+@keyframes studioFlash {
+  0% {
+    opacity: 1;
+    background-color: #ffffff;
+  }
+  30% {
+    opacity: 0.9;
+    background-color: #ffffff;
+  }
+  100% {
+    opacity: 0;
+    background-color: transparent;
+  }
+}
+
+.animate-studio-flash {
+  animation: studioFlash 0.4s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+}
