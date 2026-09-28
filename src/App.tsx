@@ -4,6 +4,7 @@ import { CameraView } from './components/booth/CameraView';
 import { ShutterControls } from './components/booth/ShutterControls';
 import { StripTray } from './components/booth/StripTray';
 import { LayoutSelector } from './components/studio/LayoutSelector';
+import { PhotoReorderTray } from './components/studio/PhotoReorderTray';
 import { FramePicker } from './components/studio/FramePicker';
 import { FilterPicker } from './components/studio/FilterPicker';
 import { EditorCanvas } from './components/studio/EditorCanvas';
@@ -77,10 +78,13 @@ export const App: React.FC = () => {
               {/* 1. Layout Selector */}
               <LayoutSelector />
 
-              {/* 2. Frame Color Picker */}
+              {/* 2. Photo Reorder & Swap Tray */}
+              <PhotoReorderTray />
+
+              {/* 3. Frame Color Picker & Slot Calibrator */}
               <FramePicker />
 
-              {/* 3. Filter Preset Picker */}
+              {/* 4. Filter Preset Picker */}
               <FilterPicker />
             </aside>
 

@@ -592,13 +592,15 @@ export async function composePhotostrip(
   // 2. Draw theme decorations (retro film sprockets, cherries, daisies, clouds, etc.)
   drawFrameThemedDecorations(ctx, frame.id, dim, scale);
 
-  // 3. Preload all available photo images
-  const loadedImages: (HTMLImageElement | null)[] = await Promise.all(
+  // 3. Preload all available photo images mapped by poseIndex
+  const photoImageMap = new Map<number, HTMLImageElement>();
+  await Promise.all(
     photos.map(async (photo) => {
       try {
-        return await loadImage(photo.dataUrl);
+        const img = await loadImage(photo.dataUrl);
+        photoImageMap.set(photo.poseIndex, img);
       } catch {
-        return null;
+        // ignore load failure
       }
     })
   );
@@ -633,7 +635,7 @@ export async function composePhotostrip(
     const dx = baseMarginX + col * (dim.photoWidth + effectiveGapX) + scaleOffsetX;
     const dy = baseMarginTop + row * (dim.photoHeight + effectiveGapY) + scaleOffsetY;
 
-    const img = loadedImages[i];
+    const img = photoImageMap.get(i);
 
     if (img) {
       ctx.save();

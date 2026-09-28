@@ -11,7 +11,6 @@ interface ShutterControlsProps {
 export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame }) => {
   const {
     layout,
-    setLayout,
     timerDuration,
     setTimerDuration,
     captureState,
@@ -124,27 +123,12 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
     <div className="w-full bg-studio-milk/90 backdrop-blur-md rounded-2xl px-4 py-2.5 border border-black/[0.05] shadow-soft-sm flex flex-col gap-2">
       {/* Upper Status & Layout Row */}
       <div className="flex items-center justify-between">
-        {/* Layout quick switcher */}
-        <div className="flex items-center gap-1.5 bg-studio-oat/90 p-1 rounded-xl border border-black/[0.04]">
-          {(['strip_1x4', 'strip_1x3', 'grid_2x2'] as const).map((lKey) => {
-            const cfg = LAYOUT_CONFIGS[lKey];
-            const isSelected = layout === lKey;
-            return (
-              <button
-                key={lKey}
-                type="button"
-                disabled={isCapturing}
-                onClick={() => setLayout(lKey)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${
-                  isSelected
-                    ? 'bg-white text-studio-graphite shadow-soft-sm'
-                    : 'text-stone-500 hover:text-studio-graphite'
-                }`}
-              >
-                {cfg.name.replace('Classic ', '').replace('Studio ', '').replace('Trio ', '')}
-              </button>
-            );
-          })}
+        {/* Active Layout Badge */}
+        <div className="flex items-center gap-2 px-3 py-1 bg-studio-oat/90 rounded-xl border border-black/[0.04]">
+          <span className="text-[10.5px] font-semibold text-stone-500 uppercase tracking-wider">Target:</span>
+          <span className="text-xs font-bold text-studio-graphite">
+            {layoutConfig.name} ({totalPhotosNeeded} Shots)
+          </span>
         </div>
 
         {/* Timer Presets (3s / 5s) */}

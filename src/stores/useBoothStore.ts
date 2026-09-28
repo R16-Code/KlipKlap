@@ -39,6 +39,8 @@ interface BoothState {
   capturedPhotos: CapturedPhoto[];
   addPhoto: (photo: CapturedPhoto) => void;
   retakeSinglePhoto: (index: number) => void;
+  swapPhotos: (indexA: number, indexB: number) => void;
+  movePhoto: (fromIndex: number, toIndex: number) => void;
   clearPhotos: () => void;
   resetSession: () => void;
 
@@ -111,6 +113,72 @@ export const useBoothStore = create<BoothState>((set, get) => ({
         currentStep: 'booth',
         captureState: 'idle',
       };
+    });
+  },
+
+  swapPhotos: (indexA, indexB) => {
+    set((state) => {
+      const photos = [...state.capturedPhotos];
+      const photoA = photos.find((p) => p.poseIndex === indexA);
+      const photoB = photos.find((p) => p.poseIndex === indexB);
+
+      if (photoA && photoB) {
+        const updated = photos.map((p) => {
+          if (p.id === photoA.id) return { ...p, poseIndex: indexB };
+          if (p.id === photoB.id) return { ...p, poseIndex: indexA };
+          return p;
+        });
+        updated.sort((a, b) => a.poseIndex - b.poseIndex);
+        return { capturedPhotos: updated };
+      }
+
+      if (photoA && !photoB) {
+        const updated = photos.map((p) => {
+          if (p.id === photoA.id) return { ...p, poseIndex: indexB };
+          return p;
+        });
+        updated.sort((a, b) => a.poseIndex - b.poseIndex);
+        return { capturedPhotos: updated };
+      }
+
+      if (!photoA && photoB) {
+        const updated = photos.map((p) => {
+          if (p.id === photoB.id) return { ...p, poseIndex: indexA };
+          return p;
+        });
+        updated.sort((a, b) => a.poseIndex - b.poseIndex);
+        return { capturedPhotos: updated };
+      }
+
+      return state;
+    });
+  },
+
+  movePhoto: (fromIndex, toIndex) => {
+    set((state) => {
+      const photos = [...state.capturedPhotos];
+      const targetPhoto = photos.find((p) => p.poseIndex === fromIndex);
+      if (!targetPhoto) return state;
+
+      // Adjust poseIndex of other photos shifting
+      const updated = photos.map((p) => {
+        if (p.id === targetPhoto.id) {
+          return { ...p, poseIndex: toIndex };
+        }
+        if (fromIndex < toIndex) {
+          if (p.poseIndex > fromIndex && p.poseIndex <= toIndex) {
+            return { ...p, poseIndex: p.poseIndex - 1 };
+          }
+        } else if (fromIndex > toIndex) {
+          if (p.poseIndex >= toIndex && p.poseIndex < fromIndex) {
+            return { ...p, poseIndex: p.poseIndex + 1 };
+          }
+        }
+        return p;
+      });
+
+      updated.sort((a, b) => a.poseIndex - b.poseIndex);
+      return { capturedPhotos: updated };
     });
   },
 
