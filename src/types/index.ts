@@ -2,7 +2,14 @@
  * Type definitions for KlipKlap Korean Photobooth Studio
  */
 
-export type LayoutType = 'strip_1x3' | 'strip_1x4' | 'grid_2x2' | 'strip_1x2';
+export type LayoutType =
+  | 'strip_1x4'
+  | 'strip_1x3'
+  | 'strip_1x2'
+  | 'grid_2x2'
+  | 'grid_3x3'
+  | 'grid_2x3'
+  | 'polaroid_1x1';
 
 export interface LayoutConfig {
   id: LayoutType;
@@ -12,20 +19,27 @@ export interface LayoutConfig {
   columns: number;
   rows: number;
   aspectRatio: string;
-  isPro?: boolean;
 }
 
-export type FilterType = 'normal' | 'bw' | 'sepia' | 'grain';
+export type FilterType =
+  | 'normal'
+  | 'bw'
+  | 'sepia'
+  | 'grain'
+  | 'pastel'
+  | 'fuji'
+  | 'cyber'
+  | 'cinema'
+  | 'soft';
 
 export interface FilterOption {
   id: FilterType;
   name: string;
   koreanName: string;
   description: string;
-  isPro?: boolean;
 }
 
-export type FrameCategory = 'solid' | 'retro' | 'cute' | 'custom';
+export type FrameCategory = 'solid' | 'retro' | 'cute' | 'y2k';
 
 export interface FrameOption {
   id: string;
@@ -36,11 +50,8 @@ export interface FrameOption {
   subtextColor: string;
   borderColor?: string;
   emoji?: string;
-  isPro?: boolean;
   borderPreviewClass?: string;
   tagline?: string;
-  isCustom?: boolean;
-  customImageUrl?: string; // Data URL or object URL of uploaded custom frame template from Canva/Figma
 }
 
 export type AppStep = 'booth' | 'studio';
@@ -56,7 +67,7 @@ export interface CapturedPhoto {
 
 export interface SlotCalibration {
   marginTopOffset: number; // in pixels, e.g. -30 to +30
-  gapOffset: number; // in pixels, e.g. -10 to +25
+  gapOffset: number; // in pixels, e.g. -12 to +24
   scaleFactor: number; // scale multiplier, e.g. 0.85 to 1.15
   marginSideOffset: number; // in pixels, e.g. -20 to +20
 }

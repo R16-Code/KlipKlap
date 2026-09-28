@@ -6,7 +6,6 @@ import type {
   CaptureState,
   CapturedPhoto,
   StudioSettings,
-  FrameOption,
   SlotCalibration,
 } from '../types';
 
@@ -46,9 +45,6 @@ interface BoothState {
   // Studio customization
   selectedFrame: string;
   setSelectedFrame: (frameId: string) => void;
-  customFrames: FrameOption[];
-  addCustomFrame: (frame: FrameOption) => void;
-  removeCustomFrame: (id: string) => void;
   selectedFilter: FilterType;
   setSelectedFilter: (filter: FilterType) => void;
   studioSettings: StudioSettings;
@@ -135,18 +131,6 @@ export const useBoothStore = create<BoothState>((set, get) => ({
 
   selectedFrame: 'cloud_white',
   setSelectedFrame: (frameId) => set({ selectedFrame: frameId }),
-
-  customFrames: [],
-  addCustomFrame: (frame) =>
-    set((state) => ({
-      customFrames: [frame, ...state.customFrames],
-      selectedFrame: frame.id,
-    })),
-  removeCustomFrame: (id) =>
-    set((state) => ({
-      customFrames: state.customFrames.filter((f) => f.id !== id),
-      selectedFrame: state.selectedFrame === id ? 'cloud_white' : state.selectedFrame,
-    })),
 
   selectedFilter: 'normal',
   setSelectedFilter: (filter) => set({ selectedFilter: filter }),

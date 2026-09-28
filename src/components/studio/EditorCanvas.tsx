@@ -8,7 +8,6 @@ export const EditorCanvas: React.FC = () => {
     capturedPhotos,
     layout,
     selectedFrame,
-    customFrames,
     selectedFilter,
     studioSettings,
   } = useBoothStore();
@@ -21,13 +20,11 @@ export const EditorCanvas: React.FC = () => {
     let isMounted = true;
 
     const render = async () => {
-      const activeCustomFrame = customFrames.find((f) => f.id === selectedFrame);
       // Scale 1.5 gives crisp retina display rendering inside the UI container
       await composePhotostrip(canvas, {
         photos: capturedPhotos,
         layout,
         frameId: selectedFrame,
-        customFrame: activeCustomFrame,
         filter: selectedFilter,
         settings: studioSettings,
         scale: 1.5,

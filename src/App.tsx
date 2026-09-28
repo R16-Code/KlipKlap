@@ -1,6 +1,5 @@
 import React from 'react';
 import { Header } from './components/common/Header';
-import { ProModal } from './components/common/ProModal';
 import { CameraView } from './components/booth/CameraView';
 import { ShutterControls } from './components/booth/ShutterControls';
 import { StripTray } from './components/booth/StripTray';
@@ -97,9 +96,6 @@ export const App: React.FC = () => {
           </div>
         )}
       </main>
-
-      {/* Pro Membership Upgrade Teaser Modal */}
-      <ProModal />
     </div>
   );
 };

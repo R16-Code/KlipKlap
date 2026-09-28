@@ -9,7 +9,6 @@ export const ExportSidebar: React.FC = () => {
     capturedPhotos,
     layout,
     selectedFrame,
-    customFrames,
     selectedFilter,
     studioSettings,
     updateStudioSettings,
@@ -25,13 +24,11 @@ export const ExportSidebar: React.FC = () => {
 
     try {
       setIsExporting(true);
-      const activeCustomFrame = customFrames.find((f) => f.id === selectedFrame);
       await downloadHighResPhotostrip(
         {
           photos: capturedPhotos,
           layout,
           frameId: selectedFrame,
-          customFrame: activeCustomFrame,
           filter: selectedFilter,
           settings: studioSettings,
           scale: 2.5, // 300 DPI high-res scale
