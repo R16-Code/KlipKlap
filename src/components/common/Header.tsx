@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Camera, RotateCcw, Heart } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 
 export const Header: React.FC = () => {
   const { currentStep, setCurrentStep, resetSession, capturedPhotos } = useBoothStore();
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const handleStepChange = (targetStep: 'booth' | 'studio') => {
     if (targetStep === 'studio' && capturedPhotos.length === 0) {
@@ -16,8 +17,15 @@ export const Header: React.FC = () => {
     <header className="h-16 px-6 border-b border-black/[0.06] bg-studio-milk/90 backdrop-blur-md flex items-center justify-between shrink-0 select-none z-30">
       {/* Brand Logo */}
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-studio-charcoal text-studio-milk flex items-center justify-center shadow-soft-sm">
-          <Camera className="w-5 h-5" />
+        <div className="w-9 h-9 rounded-xl bg-studio-charcoal text-studio-milk flex items-center justify-center shadow-soft-sm overflow-hidden relative">
+          <img
+            src="/logo.png"
+            alt="KlipKlap Logo"
+            className={`w-full h-full object-contain p-1 ${logoLoaded ? 'block' : 'hidden'}`}
+            onLoad={() => setLogoLoaded(true)}
+            onError={() => setLogoLoaded(false)}
+          />
+          {!logoLoaded && <Camera className="w-5 h-5" />}
         </div>
         <div>
           <div className="flex items-center gap-2">

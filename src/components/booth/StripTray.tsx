@@ -67,8 +67,8 @@ export const StripTray: React.FC = () => {
           </span>
         </div>
 
-        {/* Scrollable Layout Pills with Mini Wireframes */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+        {/* Layout Selection Grid (All 7 layouts displayed cleanly without horizontal scroll) */}
+        <div className="grid grid-cols-4 gap-1.5 pt-0.5">
           {layoutKeys.map((key) => {
             const cfg = LAYOUT_CONFIGS[key];
             const isSelected = layout === key;
@@ -82,7 +82,7 @@ export const StripTray: React.FC = () => {
                   setLayout(key);
                   setSelectedSwapIndex(null);
                 }}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-semibold transition-all whitespace-nowrap ${
+                className={`flex flex-col items-center justify-center p-1.5 rounded-xl border text-center transition-all ${
                   isSelected
                     ? 'border-studio-graphite bg-white shadow-soft-sm ring-1 ring-studio-graphite/20 text-studio-graphite'
                     : 'border-stone-200/80 bg-stone-50/60 hover:bg-white text-stone-600'
@@ -90,12 +90,21 @@ export const StripTray: React.FC = () => {
                 title={`${cfg.name} (${cfg.photoCount} cuts)`}
               >
                 {/* Mini wireframe */}
-                <span className="w-3.5 h-3.5 flex items-center justify-center">
+                <div className="w-4 h-4 flex items-center justify-center mb-0.5">
                   {key === 'grid_3x3' ? (
                     <span className="w-3 h-3 grid grid-cols-3 gap-0.5">
                       <span className="bg-current rounded-[0.5px]" />
                       <span className="bg-current rounded-[0.5px]" />
                       <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                    </span>
+                  ) : key === 'grid_2x3' ? (
+                    <span className="w-2.5 h-3.5 grid grid-cols-2 gap-0.5">
                       <span className="bg-current rounded-[0.5px]" />
                       <span className="bg-current rounded-[0.5px]" />
                       <span className="bg-current rounded-[0.5px]" />
@@ -110,15 +119,35 @@ export const StripTray: React.FC = () => {
                       <span className="bg-current rounded-[0.5px]" />
                       <span className="bg-current rounded-[0.5px]" />
                     </span>
+                  ) : key === 'polaroid_1x1' ? (
+                    <span className="w-3 h-3.5 flex flex-col p-0.5 pb-1 bg-stone-300 rounded-[1.5px]">
+                      <span className="flex-1 bg-current rounded-[0.5px]" />
+                    </span>
                   ) : (
                     <span className="w-2.5 h-3.5 flex flex-col gap-0.5">
                       <span className="flex-1 bg-current rounded-[0.5px]" />
                       <span className="flex-1 bg-current rounded-[0.5px]" />
                     </span>
                   )}
+                </div>
+                <span className="text-[10px] font-bold leading-tight">
+                  {key === 'strip_1x4'
+                    ? '1×4'
+                    : key === 'strip_1x3'
+                    ? '1×3'
+                    : key === 'grid_2x2'
+                    ? '2×2'
+                    : key === 'grid_3x3'
+                    ? '3×3'
+                    : key === 'grid_2x3'
+                    ? '2×3'
+                    : key === 'strip_1x2'
+                    ? '1×2'
+                    : '1×1'}
                 </span>
-                <span>{cfg.name.split(' ')[0]}</span>
-                <span className="text-[9.5px] opacity-70">({cfg.photoCount})</span>
+                <span className="text-[9px] opacity-70 leading-none">
+                  {cfg.photoCount} cuts
+                </span>
               </button>
             );
           })}

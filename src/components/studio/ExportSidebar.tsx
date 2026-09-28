@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { downloadHighResPhotostrip } from '../../utils/canvasComposer';
 import confetti from 'canvas-confetti';
@@ -150,10 +150,23 @@ export const ExportSidebar: React.FC = () => {
             <span className="text-stone-500 capitalize">{selectedFrame.replace('_', ' ')}</span>
           </div>
         </div>
+
+        {/* 100% Client-Side Privacy Guarantee */}
+        <div className="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 flex items-start gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+          <div className="text-[10.5px] leading-snug">
+            <span className="font-bold text-emerald-900 block">
+              Privasi & Keamanan 100%
+            </span>
+            <p className="text-emerald-800/90 text-[10px] mt-0.5 leading-relaxed">
+              Foto diproses lokal di browser laptop. KlipKlap <strong>tidak pernah mengunggah atau menyimpan</strong> foto Anda ke server/database mana pun.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="pt-4 border-t border-stone-200/60 space-y-2 mt-4">
+      <div className="pt-3 border-t border-stone-200/60 space-y-2 mt-3">
         {/* Download Button */}
         <button
           type="button"
@@ -181,6 +194,21 @@ export const ExportSidebar: React.FC = () => {
               <span>Download High-Res</span>
             </>
           )}
+        </button>
+
+        {/* Clear Photos / End Session Button */}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Hapus seluruh foto sesi ini dari memori browser?')) {
+              resetSession();
+            }
+          }}
+          className="w-full py-2 px-3 rounded-xl border border-rose-200/80 bg-rose-50/50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+          title="Hapus foto dari memori browser demi privasi Anda"
+        >
+          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+          <span>Selesai & Hapus Semua Foto</span>
         </button>
 
         {/* Secondary Navigation */}
