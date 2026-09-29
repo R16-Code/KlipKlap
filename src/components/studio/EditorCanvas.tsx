@@ -45,14 +45,17 @@ export const EditorCanvas: React.FC = () => {
     let isMounted = true;
 
     const render = async () => {
-      // Scale 1.5 gives crisp retina display rendering inside the UI container
+      // High-DPI scale (2x or 3x devicePixelRatio) ensures ultra-crisp display across Retina iPhones, iPads, and desktop displays
+      const dpr = typeof window !== 'undefined' ? Math.max(window.devicePixelRatio || 1, 2) : 2;
+      const previewScale = Math.min(dpr, 2.5);
+
       await composePhotostrip(canvas, {
         photos: capturedPhotos,
         layout,
         frameId: selectedFrame,
         filter: selectedFilter,
         settings: studioSettings,
-        scale: 1.5,
+        scale: previewScale,
       });
       if (!isMounted) return;
     };
@@ -205,7 +208,7 @@ export const EditorCanvas: React.FC = () => {
         <div className="relative rounded-2xl shadow-photo overflow-hidden border border-black/[0.08] bg-white flex items-center justify-center max-h-full">
           <canvas
             ref={canvasRef}
-            className="block max-h-[66vh] w-auto max-w-[85vw] object-contain transition-all"
+            className="block max-h-[50dvh] sm:max-h-[56dvh] lg:max-h-[66vh] w-auto max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] object-contain transition-all"
             style={{ imageRendering: 'auto' }}
           />
 

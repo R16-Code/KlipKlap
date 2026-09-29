@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { FlipHorizontal, AlertCircle, Sparkles, RefreshCw } from 'lucide-react';
+import { FlipHorizontal, AlertCircle, Sparkles, RefreshCw, SwitchCamera } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 
 interface CameraViewProps {
@@ -11,6 +11,9 @@ interface CameraViewProps {
   isSimulated: boolean;
   toggleSimulationMode: () => void;
   syncVideoRef?: (video: HTMLVideoElement | null) => void;
+  facingMode?: 'user' | 'environment';
+  toggleFacingMode?: () => void;
+  hasMultipleCameras?: boolean;
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({
@@ -22,9 +25,15 @@ export const CameraView: React.FC<CameraViewProps> = ({
   isSimulated,
   toggleSimulationMode,
   syncVideoRef,
+  facingMode = 'user',
+  toggleFacingMode,
+  hasMultipleCameras = false,
 }) => {
   const { isMirrored, toggleMirror, captureState, countdownValue, currentPoseIndex } =
     useBoothStore();
+
+  // Effective mirror: only apply mirror flip when using front (user) camera
+  const effectiveMirror = isMirrored && facingMode === 'user';
 
   // Re-bind media stream to video element on component mount (e.g. Back from Studio)
   useEffect(() => {
@@ -34,7 +43,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
   }, [videoRef, syncVideoRef]);
 
   return (
-    <div className="relative w-full h-full rounded-3xl overflow-hidden bg-stone-900 border border-black/10 shadow-soft-lg flex items-center justify-center">
+    <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-900 border border-black/10 shadow-soft-lg flex items-center justify-center">
       {/* HTML5 Live Video Feed */}
       <video
         ref={(el) => {
@@ -47,7 +56,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
         playsInline
         muted
         className={`w-full h-full object-cover transition-transform duration-300 ${
-          isMirrored ? '-scale-x-100' : 'scale-x-100'
+          effectiveMirror ? '-scale-x-100' : 'scale-x-100'
         }`}
       />
 
@@ -55,45 +64,65 @@ export const CameraView: React.FC<CameraViewProps> = ({
       <div className="absolute inset-0 pointer-events-none bg-radial-gradient from-transparent via-transparent to-black/30" />
 
       {/* Top Controls Bar */}
-      <div className="absolute top-4 inset-x-4 flex items-center justify-between pointer-events-auto z-20">
+      <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 flex items-center justify-between pointer-events-auto z-20">
         {/* Live Studio Status Pill */}
-        <div className="flex items-center gap-2 bg-stone-900/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-white shadow-soft-sm">
+        <div className="flex items-center gap-2 bg-stone-900/70 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 text-white shadow-soft-sm">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <span className="text-[11px] font-medium tracking-wide uppercase">
-            {isSimulated ? 'Simulated Feed' : 'Live Camera'}
+          <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide uppercase">
+            {isSimulated ? 'Simulated' : 'Live Camera'}
           </span>
-          <span className="text-[10px] text-stone-400 font-mono">1080p</span>
+          <span className="text-[9px] sm:text-[10px] text-stone-300 font-mono hidden xs:inline">1080p</span>
         </div>
 
-        {/* Action Buttons: Mirror & Demo Mode */}
-        <div className="flex items-center gap-2">
+        {/* Action Buttons: Flip Camera, Mirror & Demo Mode */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {error && (
             <button
               type="button"
               onClick={toggleSimulationMode}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/90 text-white text-xs font-medium hover:bg-amber-600 transition-colors shadow-soft-sm backdrop-blur-md"
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-full bg-amber-500/90 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-soft-sm backdrop-blur-md active:scale-95"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Use Demo Feed</span>
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline">Use Demo</span>
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={toggleMirror}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all backdrop-blur-md border ${
-              isMirrored
-                ? 'bg-white/90 text-studio-graphite border-white shadow-soft-sm'
-                : 'bg-stone-900/60 text-white/90 border-white/10 hover:bg-stone-900/80'
-            }`}
-            title="Mirror camera horizontal flip"
-          >
-            <FlipHorizontal className="w-3.5 h-3.5" />
-            <span>Mirror: {isMirrored ? 'ON' : 'OFF'}</span>
-          </button>
+          {/* Flip Camera Button (Front / Rear toggle for mobile & touch devices) */}
+          {(hasMultipleCameras || toggleFacingMode) && (
+            <button
+              type="button"
+              onClick={toggleFacingMode}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md bg-stone-900/70 text-white/90 border border-white/15 hover:bg-stone-900/90 active:scale-95 shadow-soft-sm"
+              title="Beralih kamera depan/belakang"
+              aria-label="Switch front or back camera"
+            >
+              <SwitchCamera className="w-4 h-4 text-white" />
+              <span className="text-[11px] font-medium hidden md:inline">
+                {facingMode === 'environment' ? 'Rear' : 'Front'}
+              </span>
+            </button>
+          )}
+
+          {/* Mirror Toggle (Available only for front/selfie camera) */}
+          {facingMode !== 'environment' && (
+            <button
+              type="button"
+              onClick={toggleMirror}
+              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md border active:scale-95 ${
+                effectiveMirror
+                  ? 'bg-white/95 text-studio-graphite border-white shadow-soft-sm'
+                  : 'bg-stone-900/70 text-white/90 border-white/15 hover:bg-stone-900/90'
+              }`}
+              title="Mirror camera horizontal flip"
+              aria-label="Toggle mirror mode"
+            >
+              <FlipHorizontal className="w-4 h-4" />
+              <span className="hidden md:inline">Mirror: {effectiveMirror ? 'ON' : 'OFF'}</span>
+            </button>
+          )}
         </div>
       </div>
 

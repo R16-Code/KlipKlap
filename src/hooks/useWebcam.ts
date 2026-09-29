@@ -6,12 +6,15 @@ interface UseWebcamReturn {
   isLoading: boolean;
   error: string | null;
   hasPermission: boolean;
-  startCamera: () => Promise<void>;
+  startCamera: (targetFacingMode?: 'user' | 'environment') => Promise<void>;
   stopCamera: () => void;
   syncVideoRef: (video: HTMLVideoElement | null) => void;
   captureFrame: (isMirrored: boolean, targetRatio?: number) => string | null;
   isSimulated: boolean;
   toggleSimulationMode: () => void;
+  facingMode: 'user' | 'environment';
+  toggleFacingMode: () => void;
+  hasMultipleCameras: boolean;
 }
 
 export function useWebcam(): UseWebcamReturn {
@@ -19,11 +22,37 @@ export function useWebcam(): UseWebcamReturn {
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
 
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const facingModeRef = useRef<'user' | 'environment'>('user');
+  facingModeRef.current = facingMode;
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
   const [isSimulated, setIsSimulated] = useState(false);
+
+  // Check available camera devices & touch capability
+  useEffect(() => {
+    async function checkDevices() {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+          const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+          setHasMultipleCameras(videoInputs.length > 1 || isTouch);
+        } catch {
+          const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+          setHasMultipleCameras(isTouch);
+        }
+      } else {
+        const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+        setHasMultipleCameras(isTouch);
+      }
+    }
+    checkDevices();
+  }, []);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -42,7 +71,8 @@ export function useWebcam(): UseWebcamReturn {
     }
   }, []);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (targetFacingMode?: 'user' | 'environment') => {
+    const mode = targetFacingMode || facingModeRef.current;
     setIsLoading(true);
     setError(null);
 
@@ -67,18 +97,28 @@ export function useWebcam(): UseWebcamReturn {
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            facingMode: { ideal: mode },
           },
           audio: false,
         });
       } catch {
-        // Fallback to basic video constraint if ideal constraints fail on specific hardware
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        try {
+          // Fallback to flexible resolution with facingMode
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: mode },
+            },
+            audio: false,
+          });
+        } catch {
+          // Fallback to basic video constraint if ideal constraints fail
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
 
       // If component unmounted while awaiting getUserMedia (React Strict Mode safeguard)
@@ -114,6 +154,15 @@ export function useWebcam(): UseWebcamReturn {
       setHasPermission(false);
     }
   }, []);
+
+  const toggleFacingMode = useCallback(() => {
+    setFacingMode((prev) => {
+      const next = prev === 'user' ? 'environment' : 'user';
+      facingModeRef.current = next;
+      startCamera(next);
+      return next;
+    });
+  }, [startCamera]);
 
   // Initial camera startup with React Strict Mode safeguard
   useEffect(() => {
@@ -321,8 +370,9 @@ export function useWebcam(): UseWebcamReturn {
 
       ctx.save();
 
-      // Handle horizontal mirroring if enabled
-      if (isMirrored) {
+      // Handle horizontal mirroring: ONLY if user camera (front/selfie)
+      const shouldMirror = isMirrored && facingModeRef.current === 'user';
+      if (shouldMirror) {
         ctx.translate(outputWidth, 0);
         ctx.scale(-1, 1);
       }
@@ -359,5 +409,8 @@ export function useWebcam(): UseWebcamReturn {
     captureFrame,
     isSimulated,
     toggleSimulationMode,
+    facingMode,
+    toggleFacingMode,
+    hasMultipleCameras,
   };
 }
