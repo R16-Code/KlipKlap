@@ -218,10 +218,10 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
           })}
         </div>
 
-        {/* Timer Presets (3s / 5s) */}
+        {/* Timer Presets (3s / 5s / 10s) */}
         <div className="flex items-center gap-1.5 bg-stone-100/90 p-1 rounded-xl border border-black/[0.04] shrink-0">
           <Timer className="w-3.5 h-3.5 text-stone-500 ml-1.5" />
-          {[3, 5].map((sec) => (
+          {[3, 5, 10].map((sec) => (
             <button
               key={sec}
               type="button"

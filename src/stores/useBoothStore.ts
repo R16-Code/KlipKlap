@@ -22,7 +22,7 @@ interface BoothState {
   isMirrored: boolean;
   setIsMirrored: (mirrored: boolean) => void;
   toggleMirror: () => void;
-  timerDuration: number; // 3 or 5 seconds
+  timerDuration: number; // 3, 5, or 10 seconds
   setTimerDuration: (seconds: number) => void;
 
   // Capture sequence state machine
