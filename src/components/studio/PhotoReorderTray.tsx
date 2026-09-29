@@ -99,15 +99,15 @@ export const PhotoReorderTray: React.FC = () => {
                       setDraggedIndex(null);
                     }
                   }}
-                  onClick={() => photo && handleSlotClick(slotIdx)}
+                  onClick={() => handleSlotClick(slotIdx)}
                   className={`relative rounded-xl overflow-hidden border transition-all aspect-[4/3] flex items-center justify-center cursor-pointer select-none group ${
                     isSelectedForSwap
                       ? 'border-blue-500 ring-2 ring-blue-400 bg-blue-50 shadow-md scale-95'
                       : photo
                       ? 'border-stone-200/80 bg-stone-900 hover:border-studio-graphite hover:shadow-soft-sm'
-                      : 'border-dashed border-stone-300 bg-stone-100/60 opacity-60 cursor-default'
+                      : 'border-dashed border-stone-300 bg-stone-100/60 opacity-60 hover:border-blue-400'
                   }`}
-                  title={photo ? `Foto CUT 0${slotIdx + 1} - Klik untuk tukar posisi` : `Slot kosong`}
+                  title={photo ? `Foto CUT 0${slotIdx + 1} - Klik untuk tukar posisi` : `Slot kosong - Klik untuk memindahkan foto kesini`}
                 >
                   {photo ? (
                     <>
