@@ -11,6 +11,7 @@ interface ShutterControlsProps {
 export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame }) => {
   const {
     layout,
+    setLayout,
     timerDuration,
     setTimerDuration,
     captureState,
@@ -24,6 +25,16 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
     addPhoto,
     setCurrentStep,
   } = useBoothStore();
+
+  const layoutKeys: import('../../types').LayoutType[] = [
+    'strip_1x4',
+    'strip_1x3',
+    'grid_2x2',
+    'grid_3x3',
+    'grid_2x3',
+    'strip_1x2',
+    'polaroid_1x1',
+  ];
 
   const layoutConfig = LAYOUT_CONFIGS[layout];
   const totalPhotosNeeded = layoutConfig.photoCount;
@@ -121,18 +132,94 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
 
   return (
     <div className="w-full bg-studio-milk/90 backdrop-blur-md rounded-2xl px-4 py-2.5 border border-black/[0.05] shadow-soft-sm flex flex-col gap-2">
-      {/* Upper Status & Layout Row */}
-      <div className="flex items-center justify-between">
-        {/* Active Layout Badge */}
-        <div className="flex items-center gap-2 px-3 py-1 bg-studio-oat/90 rounded-xl border border-black/[0.04]">
-          <span className="text-[10.5px] font-semibold text-stone-500 uppercase tracking-wider">Target:</span>
-          <span className="text-xs font-bold text-studio-graphite">
-            {layoutConfig.name} ({totalPhotosNeeded} Shots)
+      {/* Upper Layout Selector & Timer Row */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Layout Selection Pills (7 layouts displayed under camera) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mr-0.5 shrink-0">
+            Layout:
           </span>
+          {layoutKeys.map((key) => {
+            const cfg = LAYOUT_CONFIGS[key];
+            const isSelected = layout === key;
+
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={isCapturing}
+                onClick={() => setLayout(key)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs font-semibold transition-all shrink-0 ${
+                  isSelected
+                    ? 'border-studio-graphite bg-white text-studio-graphite shadow-soft-sm ring-1 ring-studio-graphite/20'
+                    : 'border-stone-200/80 bg-stone-50/70 text-stone-600 hover:bg-white hover:text-stone-900'
+                }`}
+                title={`${cfg.name} (${cfg.photoCount} cuts)`}
+              >
+                {/* Mini wireframe */}
+                <div className="w-3.5 h-3.5 flex items-center justify-center shrink-0">
+                  {key === 'grid_3x3' ? (
+                    <span className="w-3 h-3 grid grid-cols-3 gap-0.5">
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                    </span>
+                  ) : key === 'grid_2x3' ? (
+                    <span className="w-2.5 h-3 grid grid-cols-2 gap-0.5">
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                    </span>
+                  ) : key === 'grid_2x2' ? (
+                    <span className="w-3 h-3 grid grid-cols-2 gap-0.5">
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                      <span className="bg-current rounded-[0.5px]" />
+                    </span>
+                  ) : key === 'polaroid_1x1' ? (
+                    <span className="w-3 h-3 flex flex-col p-0.5 pb-1 bg-stone-300 rounded-[1px]">
+                      <span className="flex-1 bg-current rounded-[0.5px]" />
+                    </span>
+                  ) : (
+                    <span className="w-2.5 h-3 flex flex-col gap-0.5">
+                      <span className="flex-1 bg-current rounded-[0.5px]" />
+                      <span className="flex-1 bg-current rounded-[0.5px]" />
+                    </span>
+                  )}
+                </div>
+                <span>
+                  {key === 'strip_1x4'
+                    ? '1×4'
+                    : key === 'strip_1x3'
+                    ? '1×3'
+                    : key === 'grid_2x2'
+                    ? '2×2'
+                    : key === 'grid_3x3'
+                    ? '3×3'
+                    : key === 'grid_2x3'
+                    ? '2×3'
+                    : key === 'strip_1x2'
+                    ? '1×2'
+                    : '1×1'}
+                </span>
+                <span className="text-[10px] opacity-60">({cfg.photoCount})</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Timer Presets (3s / 5s) */}
-        <div className="flex items-center gap-1.5 bg-studio-oat/90 p-1 rounded-xl border border-black/[0.04]">
+        <div className="flex items-center gap-1.5 bg-stone-100/90 p-1 rounded-xl border border-black/[0.04] shrink-0">
           <Timer className="w-3.5 h-3.5 text-stone-500 ml-1.5" />
           {[3, 5].map((sec) => (
             <button
