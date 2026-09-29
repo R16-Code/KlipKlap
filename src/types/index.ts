@@ -30,7 +30,13 @@ export type FilterType =
   | 'fuji'
   | 'cyber'
   | 'cinema'
-  | 'soft';
+  | 'soft'
+  | 'kodak'
+  | 'moody_noir'
+  | 'haru_blue'
+  | 'cherry_blossom'
+  | 'warm_latte'
+  | 'vintage_90s';
 
 export interface FilterOption {
   id: FilterType;

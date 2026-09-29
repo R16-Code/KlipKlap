@@ -562,6 +562,82 @@ function drawFrameThemedDecorations(
       ctx.fillText('✨', dim.width - dim.outerMarginX - 14 * scale, 24 * scale);
       break;
     }
+
+    case 'retro_cassette': {
+      ctx.fillStyle = '#D4A373';
+      ctx.font = `600 ${8.5 * scale}px "JetBrains Mono", monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText('SIDE A • C-90 HI-BIAS', dim.outerMarginX, 22 * scale);
+      ctx.textAlign = 'right';
+      ctx.fillText('NR [ON] • 4.76 CM/S', dim.width - dim.outerMarginX, 22 * scale);
+      ctx.fillStyle = '#E76F51';
+      ctx.fillRect(dim.outerMarginX, 26 * scale, dim.width - dim.outerMarginX * 2, 2 * scale);
+      break;
+    }
+
+    case 'retro_ticket': {
+      ctx.fillStyle = '#6B584C';
+      ctx.font = `700 ${8.5 * scale}px "Plus Jakarta Sans", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('★ ADMIT ONE • CINEMA ARCHIVE • NO. 84920 ★', dim.width / 2, 22 * scale);
+      break;
+    }
+
+    case 'cute_bear': {
+      ctx.font = `${13 * scale}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🧸', dim.outerMarginX + 14 * scale, 24 * scale);
+      ctx.fillText('🍯', dim.width - dim.outerMarginX - 14 * scale, 24 * scale);
+      break;
+    }
+
+    case 'cute_heart_ribbon': {
+      ctx.font = `${13 * scale}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🎀', dim.outerMarginX + 14 * scale, 24 * scale);
+      ctx.fillText('💕', dim.width - dim.outerMarginX - 14 * scale, 24 * scale);
+      break;
+    }
+
+    case 'cute_dino': {
+      ctx.font = `${13 * scale}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('🦖', dim.outerMarginX + 14 * scale, 24 * scale);
+      ctx.fillText('⭐', dim.width - dim.outerMarginX - 14 * scale, 24 * scale);
+      break;
+    }
+
+    case 'y2k_cyberpunk': {
+      ctx.fillStyle = '#4ADE80';
+      ctx.font = `700 ${8.5 * scale}px "JetBrains Mono", monospace`;
+      ctx.textAlign = 'left';
+      ctx.fillText('// SYS.ON: MATRIX 2000', dim.outerMarginX, 22 * scale);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#22D3EE';
+      ctx.fillText('CYBER_NODE //', dim.width - dim.outerMarginX, 22 * scale);
+      break;
+    }
+
+    case 'y2k_glitter_star': {
+      const drawChromeStar = (cx: number, cy: number, r: number) => {
+        ctx.fillStyle = '#F8FAFC';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r);
+        ctx.quadraticCurveTo(cx, cy, cx + r, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy + r);
+        ctx.quadraticCurveTo(cx, cy, cx - r, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy - r);
+        ctx.fill();
+
+        ctx.fillStyle = '#94A3B8';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      drawChromeStar(dim.outerMarginX + 14 * scale, 22 * scale, 8 * scale);
+      drawChromeStar(dim.width - dim.outerMarginX - 14 * scale, 22 * scale, 8 * scale);
+      break;
+    }
   }
 
   ctx.restore();
@@ -666,6 +742,24 @@ export async function composePhotostrip(
         case 'soft':
           ctx.filter = 'contrast(92%) saturate(108%) brightness(106%)';
           break;
+        case 'kodak':
+          ctx.filter = 'contrast(112%) saturate(135%) brightness(103%) sepia(18%)';
+          break;
+        case 'moody_noir':
+          ctx.filter = 'grayscale(100%) contrast(140%) brightness(92%)';
+          break;
+        case 'haru_blue':
+          ctx.filter = 'contrast(106%) saturate(108%) brightness(105%) hue-rotate(12deg)';
+          break;
+        case 'cherry_blossom':
+          ctx.filter = 'contrast(100%) saturate(118%) brightness(108%) hue-rotate(-14deg)';
+          break;
+        case 'warm_latte':
+          ctx.filter = 'contrast(95%) saturate(88%) brightness(103%) sepia(28%)';
+          break;
+        case 'vintage_90s':
+          ctx.filter = 'contrast(120%) saturate(125%) brightness(100%) sepia(12%) hue-rotate(-5deg)';
+          break;
         case 'normal':
         default:
           ctx.filter = 'contrast(102%) saturate(104%)';
@@ -676,16 +770,27 @@ export async function composePhotostrip(
       ctx.restore();
 
       // Film grain overlay
-      if (filter === 'grain') {
+      if (filter === 'grain' || filter === 'vintage_90s' || filter === 'kodak') {
         drawFilmGrain(ctx, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
       }
     } else {
       // Empty slot placeholder
       ctx.save();
-      ctx.fillStyle =
-        frame.id === 'matte_charcoal' || frame.id === 'retro_film' || frame.id === 'y2k_holo' || frame.id === 'y2k_pixel'
-          ? 'rgba(255, 255, 255, 0.08)'
-          : 'rgba(0, 0, 0, 0.04)';
+      const isDarkFrame =
+        frame.id === 'matte_charcoal' ||
+        frame.id === 'midnight_navy' ||
+        frame.id === 'wine_bordeaux' ||
+        frame.id === 'retro_film' ||
+        frame.id === 'retro_cassette' ||
+        frame.id === 'retro_vhs' ||
+        frame.id === 'y2k_holo' ||
+        frame.id === 'y2k_pixel' ||
+        frame.id === 'y2k_cyberpunk' ||
+        frame.id === 'y2k_glitter_star';
+
+      ctx.fillStyle = isDarkFrame
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(0, 0, 0, 0.04)';
       ctx.beginPath();
       if (typeof ctx.roundRect === 'function') {
         ctx.roundRect(dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);

@@ -24,6 +24,18 @@ export const FilterPicker: React.FC = () => {
         return 'bg-gradient-to-r from-[#0F303B] via-[#2A6570] to-[#E9B171]';
       case 'soft':
         return 'bg-gradient-to-r from-[#FFF5EE] via-[#FCE4D6] to-[#F8D7DA]';
+      case 'kodak':
+        return 'bg-gradient-to-r from-[#B45309] via-[#F59E0B] to-[#FEF3C7]';
+      case 'moody_noir':
+        return 'bg-gradient-to-r from-black via-zinc-800 to-zinc-400';
+      case 'haru_blue':
+        return 'bg-gradient-to-r from-[#3B82F6] via-[#93C5FD] to-[#EFF6FF]';
+      case 'cherry_blossom':
+        return 'bg-gradient-to-r from-[#F43F5E] via-[#FDA4AF] to-[#FFF1F2]';
+      case 'warm_latte':
+        return 'bg-gradient-to-r from-[#78350F] via-[#D97706] to-[#FEF3C7]';
+      case 'vintage_90s':
+        return 'bg-gradient-to-r from-[#EA580C] via-[#FBBF24] to-[#38BDF8]';
       case 'normal':
       default:
         return 'bg-gradient-to-r from-rose-200 via-amber-100 to-sky-100';

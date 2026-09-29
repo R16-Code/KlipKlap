@@ -80,12 +80,19 @@ export const FramePicker: React.FC = () => {
                   {isSelected && (
                     <Check
                       className={`w-3.5 h-3.5 ${
-                        frame.id === 'matte_charcoal' ||
-                        frame.id === 'retro_film' ||
-                        frame.id === 'retro_vhs' ||
-                        frame.id === 'cocoa_muted' ||
-                        frame.id === 'y2k_holo' ||
-                        frame.id === 'y2k_pixel'
+                        [
+                          'matte_charcoal',
+                          'midnight_navy',
+                          'wine_bordeaux',
+                          'retro_film',
+                          'retro_cassette',
+                          'retro_vhs',
+                          'cocoa_muted',
+                          'y2k_holo',
+                          'y2k_pixel',
+                          'y2k_cyberpunk',
+                          'y2k_glitter_star',
+                        ].includes(frame.id)
                           ? 'text-white'
                           : 'text-stone-900'
                       }`}
