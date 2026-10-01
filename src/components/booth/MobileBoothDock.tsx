@@ -125,13 +125,63 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame
 
   return (
     <div className="w-full bg-studio-milk/95 backdrop-blur-md rounded-2xl sm:rounded-3xl p-3 border border-black/[0.08] shadow-soft-lg flex flex-col justify-between gap-2 overscroll-contain select-none">
-      {/* Row 1: Layout Carousel & Timer Presets */}
-      <div className="flex items-center justify-between gap-2 shrink-0">
-        {/* Horizontal Scrollable Layout Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 max-w-[65%] sm:max-w-[70%]">
+      {/* Row 1: Layout Selection Bar & Timer Controls */}
+      <div className="flex flex-col gap-1.5 shrink-0">
+        {/* Top Info Header: Layout Name & Timer Duration */}
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider shrink-0">
+              Layout:
+            </span>
+            <span className="text-xs font-bold text-studio-graphite truncate font-sans">
+              {layoutConfig.name}
+            </span>
+            <span className="text-[10px] text-stone-500 font-medium shrink-0">
+              ({layoutConfig.photoCount} cuts)
+            </span>
+          </div>
+
+          {/* Timer Presets (3s / 5s / 10s) */}
+          <div className="flex items-center gap-0.5 bg-stone-100/90 p-0.5 rounded-xl border border-black/[0.04] shrink-0">
+            <Timer className="w-3.5 h-3.5 text-stone-500 ml-1 hidden xs:inline" />
+            {[3, 5, 10].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                disabled={isCapturing}
+                onClick={() => setTimerDuration(sec)}
+                className={`px-2 sm:px-2.5 py-0.5 sm:py-1 min-h-[30px] sm:min-h-[32px] text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center ${
+                  timerDuration === sec
+                    ? 'bg-white text-studio-graphite shadow-soft-sm'
+                    : 'text-stone-500 hover:text-studio-graphite'
+                }`}
+              >
+                {sec}s
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* All 7 Layouts Grid (Fully visible at once, zero scroll required) */}
+        <div className="grid grid-cols-7 gap-1 w-full">
           {layoutKeys.map((key) => {
             const cfg = LAYOUT_CONFIGS[key];
             const isSelected = layout === key;
+
+            const shortLabel =
+              key === 'strip_1x4'
+                ? '1×4'
+                : key === 'strip_1x3'
+                ? '1×3'
+                : key === 'grid_2x2'
+                ? '2×2'
+                : key === 'grid_3x3'
+                ? '3×3'
+                : key === 'grid_2x3'
+                ? '2×3'
+                : key === 'strip_1x2'
+                ? '1×2'
+                : '1×1';
 
             return (
               <button
@@ -139,52 +189,22 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame
                 type="button"
                 disabled={isCapturing}
                 onClick={() => setLayout(key)}
-                className={`flex items-center gap-1 px-2.5 py-1.5 min-h-[38px] rounded-xl border text-xs font-semibold transition-all shrink-0 active:scale-95 ${
+                className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl border transition-all active:scale-95 text-center min-h-[40px] ${
                   isSelected
-                    ? 'border-studio-graphite bg-white text-studio-graphite shadow-soft-sm ring-1 ring-studio-graphite/20'
-                    : 'border-stone-200/80 bg-stone-50/80 text-stone-600 hover:bg-white'
+                    ? 'border-studio-graphite bg-white text-studio-graphite shadow-soft-sm ring-1 ring-studio-graphite/20 font-bold'
+                    : 'border-stone-200/80 bg-stone-50/80 text-stone-600 hover:bg-white hover:text-studio-graphite font-medium'
                 }`}
                 title={`${cfg.name} (${cfg.photoCount} cuts)`}
               >
-                <span>
-                  {key === 'strip_1x4'
-                    ? '1×4'
-                    : key === 'strip_1x3'
-                    ? '1×3'
-                    : key === 'grid_2x2'
-                    ? '2×2'
-                    : key === 'grid_3x3'
-                    ? '3×3'
-                    : key === 'grid_2x3'
-                    ? '2×3'
-                    : key === 'strip_1x2'
-                    ? '1×2'
-                    : '1×1'}
+                <span className="text-[11px] sm:text-xs font-bold leading-none tracking-tight">
+                  {shortLabel}
                 </span>
-                <span className="text-[10px] opacity-60">({cfg.photoCount})</span>
+                <span className="text-[8.5px] sm:text-[9.5px] opacity-60 leading-none mt-1 font-medium">
+                  ({cfg.photoCount})
+                </span>
               </button>
             );
           })}
-        </div>
-
-        {/* Timer Presets (3s / 5s / 10s) */}
-        <div className="flex items-center gap-0.5 bg-stone-100/90 p-0.5 rounded-xl border border-black/[0.04] shrink-0">
-          <Timer className="w-3.5 h-3.5 text-stone-500 ml-1 hidden xs:inline" />
-          {[3, 5, 10].map((sec) => (
-            <button
-              key={sec}
-              type="button"
-              disabled={isCapturing}
-              onClick={() => setTimerDuration(sec)}
-              className={`px-2 sm:px-2.5 py-1 min-h-[38px] min-w-[32px] text-xs font-bold rounded-lg transition-all active:scale-95 flex items-center justify-center ${
-                timerDuration === sec
-                  ? 'bg-white text-studio-graphite shadow-soft-sm'
-                  : 'text-stone-500 hover:text-studio-graphite'
-              }`}
-            >
-              {sec}s
-            </button>
-          ))}
         </div>
       </div>
 
