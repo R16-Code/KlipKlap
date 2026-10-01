@@ -37,7 +37,7 @@ export const App: React.FC = () => {
               {/* Left 70% (col-span-8 or 9) - Live Camera View & Shutter */}
               <section aria-label="Webcam Capture Studio" className="col-span-8 lg:col-span-9 flex flex-col gap-3 h-full min-h-0 overflow-hidden">
                 {/* Live Webcam Feed */}
-                <div className="flex-1 w-full min-h-0 relative">
+                <div className="flex-1 w-full min-h-0 relative flex items-center justify-center">
                   <CameraView
                     videoRef={webcam.videoRef}
                     isLoading={webcam.isLoading}
@@ -73,7 +73,7 @@ export const App: React.FC = () => {
                ======================================================== */}
             <div className="flex lg:hidden flex-col h-full min-h-0 overflow-hidden gap-2">
               {/* Top Viewfinder */}
-              <div className="flex-1 w-full min-h-0 relative">
+              <div className="flex-1 w-full min-h-0 relative flex items-center justify-center">
                 <CameraView
                   videoRef={webcam.videoRef}
                   isLoading={webcam.isLoading}

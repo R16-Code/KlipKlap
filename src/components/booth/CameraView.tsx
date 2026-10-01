@@ -43,7 +43,7 @@ export const CameraView: React.FC<CameraViewProps> = ({
   }, [videoRef, syncVideoRef]);
 
   return (
-    <div className="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-900 border border-black/10 shadow-soft-lg flex items-center justify-center">
+    <div className="relative h-full max-h-full aspect-[4/3] max-w-full rounded-2xl sm:rounded-3xl overflow-hidden bg-stone-900 border border-black/10 shadow-soft-lg flex items-center justify-center mx-auto">
       {/* HTML5 Live Video Feed */}
       <video
         ref={(el) => {
@@ -123,14 +123,6 @@ export const CameraView: React.FC<CameraViewProps> = ({
               <span className="hidden md:inline">Mirror: {effectiveMirror ? 'ON' : 'OFF'}</span>
             </button>
           )}
-        </div>
-      </div>
-
-      {/* Target Framing Guides (Subtle Rule-of-Thirds / Center Portrait Lines) */}
-      <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center opacity-30">
-        <div className="w-[82%] h-[82%] border border-dashed border-white/40 rounded-2xl relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 border-t border-b border-white/40" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 border-l border-r border-white/40" />
         </div>
       </div>
 
