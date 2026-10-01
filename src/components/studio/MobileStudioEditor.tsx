@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Trash2,
   AlertTriangle,
+  Heart,
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS } from '../../utils/constants';
@@ -36,7 +37,7 @@ export const MobileStudioEditor: React.FC = () => {
     resetSession,
   } = useBoothStore();
 
-  const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'filters' | 'caption' | null>('frames');
+  const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'filters' | 'caption' | null>(null);
   const [frameCategory, setFrameCategory] = useState<FrameCategory | 'all'>('all');
   const [isExporting, setIsExporting] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -165,31 +166,23 @@ export const MobileStudioEditor: React.FC = () => {
           </span>
         </div>
 
-        <button
-          type="button"
-          disabled={isExporting}
-          onClick={handleDownload}
-          className={`flex items-center gap-1 px-3 py-1.5 min-h-[40px] rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 ${
-            downloadSuccess
-              ? 'bg-emerald-600 text-white'
-              : 'bg-studio-charcoal text-white hover:bg-black'
-          }`}
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>{isExporting ? 'Saving...' : 'Save PNG'}</span>
-        </button>
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-stone-700 bg-white/90 border border-stone-200 shadow-soft-sm shrink-0">
+          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
+          <span className="hidden xs:inline">100% Free Photobooth</span>
+          <span className="xs:hidden">100% Free</span>
+        </div>
       </header>
 
       {/* Center Viewport: Realistic Scaled Photostrip Canvas */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex items-center justify-center p-2 relative">
-        <EditorCanvas />
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col items-center justify-start sm:justify-center p-2 relative overscroll-contain">
+        <EditorCanvas isDrawerOpen={activeTab !== null} />
       </div>
 
       {/* Bottom Drawer & Tab Bar Container */}
       <div className="shrink-0 bg-white/95 backdrop-blur-lg border-t border-black/[0.08] shadow-soft-lg flex flex-col z-30">
         {/* Expandable Drawer Panel (when a tab is selected) */}
         {activeTab !== null && (
-          <div className="p-3 border-b border-stone-200/70 max-h-52 overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-200">
+          <div className="p-3 border-b border-stone-200/70 max-h-44 sm:max-h-48 overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-200">
             {/* Tab Close Header */}
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100">
               <span className="text-xs font-bold text-studio-graphite uppercase tracking-wider font-sans">

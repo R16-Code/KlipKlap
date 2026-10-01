@@ -4,7 +4,11 @@ import { useBoothStore } from '../../stores/useBoothStore';
 import { composePhotostrip } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
 
-export const EditorCanvas: React.FC = () => {
+interface EditorCanvasProps {
+  isDrawerOpen?: boolean;
+}
+
+export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {
     capturedPhotos,
@@ -68,7 +72,7 @@ export const EditorCanvas: React.FC = () => {
   }, [capturedPhotos, layout, selectedFrame, selectedFilter, studioSettings]);
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-3 select-none relative overflow-hidden">
+    <div className="w-full min-h-full flex flex-col items-center justify-center p-1 sm:p-3 select-none relative overflow-y-auto lg:overflow-hidden no-scrollbar">
       {/* Background Studio Light Accent */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
         <div className="w-96 h-96 rounded-full bg-studio-blush/40 blur-3xl" />
@@ -124,16 +128,16 @@ export const EditorCanvas: React.FC = () => {
 
       {/* Interactive Photo Reorder Bar (Positioned cleanly ABOVE the photostrip frame) */}
       {capturedPhotos.length > 1 && (
-        <div className="z-20 bg-white/95 backdrop-blur-md border border-black/[0.08] rounded-2xl px-3.5 py-1.5 shadow-soft-sm flex items-center gap-2.5 mb-2 shrink-0 max-w-[95%]">
-          <div className="flex items-center gap-1.5 text-studio-graphite shrink-0">
-            <ArrowLeftRight className="w-3.5 h-3.5 text-stone-500" />
-            <span className="text-[11px] font-bold text-studio-graphite whitespace-nowrap">
+        <div className="z-20 bg-white/95 backdrop-blur-md border border-black/[0.08] rounded-2xl px-2.5 py-1 sm:px-3.5 sm:py-1.5 shadow-soft-sm flex items-center gap-1.5 sm:gap-2.5 mb-1 sm:mb-2 shrink-0 max-w-[95%]">
+          <div className="flex items-center gap-1 sm:gap-1.5 text-studio-graphite shrink-0">
+            <ArrowLeftRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-500" />
+            <span className="text-[10px] sm:text-[11px] font-bold text-studio-graphite whitespace-nowrap">
               Tukar Posisi:
             </span>
           </div>
 
           {/* Horizontal Thumbnail Slots */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             {Array.from({ length: requiredCount }).map((_, slotIdx) => {
               const photo = capturedPhotos.find((p) => p.poseIndex === slotIdx);
               const isSelected = selectedSwapIndex === slotIdx;
@@ -151,7 +155,7 @@ export const EditorCanvas: React.FC = () => {
                     }
                   }}
                   onClick={() => handleSlotClick(slotIdx)}
-                  className={`relative rounded-xl overflow-hidden border transition-all cursor-pointer select-none flex items-center justify-center shrink-0 w-9 h-9 sm:w-10 sm:h-10 ${
+                  className={`relative rounded-lg sm:rounded-xl overflow-hidden border transition-all cursor-pointer select-none flex items-center justify-center shrink-0 w-7 h-7 sm:w-10 sm:h-10 ${
                     isSelected
                       ? 'border-blue-500 ring-2 ring-blue-400 bg-blue-50 shadow-md scale-105'
                       : photo
@@ -171,17 +175,17 @@ export const EditorCanvas: React.FC = () => {
                         alt={`Cut ${slotIdx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      <span className="absolute bottom-0.5 right-0.5 px-1 rounded bg-black/70 text-[8px] font-mono font-bold text-white">
+                      <span className="absolute bottom-0.5 right-0.5 px-0.5 rounded bg-black/70 text-[7px] sm:text-[8px] font-mono font-bold text-white">
                         0{slotIdx + 1}
                       </span>
                       {isSelected && (
                         <div className="absolute inset-0 bg-blue-600/35 flex items-center justify-center">
-                          <Check className="w-3.5 h-3.5 text-white" />
+                          <Check className="w-3 h-3 text-white" />
                         </div>
                       )}
                     </>
                   ) : (
-                    <span className="text-[9.5px] font-mono text-stone-400 font-bold">
+                    <span className="text-[8.5px] sm:text-[9.5px] font-mono text-stone-400 font-bold">
                       0{slotIdx + 1}
                     </span>
                   )}
@@ -194,7 +198,7 @@ export const EditorCanvas: React.FC = () => {
             <button
               type="button"
               onClick={() => setSelectedSwapIndex(null)}
-              className="text-[10px] text-blue-700 hover:text-blue-900 font-bold underline shrink-0 ml-1"
+              className="text-[9px] sm:text-[10px] text-blue-700 hover:text-blue-900 font-bold underline shrink-0 ml-1"
             >
               Batal
             </button>
@@ -203,17 +207,21 @@ export const EditorCanvas: React.FC = () => {
       )}
 
       {/* Photostrip Canvas Frame Wrapper (Realistic physical print feel) */}
-      <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center transition-all duration-300 transform hover:scale-[1.005]">
+      <div className="relative z-10 flex-1 min-h-0 w-full flex items-center justify-center transition-all duration-300">
         {/* Soft studio ambient drop shadow */}
-        <div className="relative rounded-2xl shadow-photo overflow-hidden border border-black/[0.08] bg-white flex items-center justify-center max-h-full">
+        <div className="relative rounded-xl sm:rounded-2xl shadow-photo border border-black/[0.08] bg-white flex items-center justify-center p-0.5">
           <canvas
             ref={canvasRef}
-            className="block max-h-[50dvh] sm:max-h-[56dvh] lg:max-h-[66vh] w-auto max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] object-contain transition-all"
+            className={`block w-auto object-contain transition-all duration-300 max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] ${
+              isDrawerOpen
+                ? 'max-h-[35dvh] sm:max-h-[46dvh] lg:max-h-[66vh]'
+                : 'max-h-[56dvh] sm:max-h-[62dvh] lg:max-h-[66vh]'
+            }`}
             style={{ imageRendering: 'auto' }}
           />
 
           {/* Glossy Paper Sheen Overlay (Korean Photostrip paper finish) */}
-          <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.04] to-white/[0.12]" />
+          <div className="absolute inset-0 pointer-events-none rounded-xl sm:rounded-2xl bg-gradient-to-tr from-transparent via-white/[0.04] to-white/[0.12]" />
         </div>
       </div>
     </div>
