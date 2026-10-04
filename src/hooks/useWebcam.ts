@@ -485,6 +485,9 @@ export function useWebcam(): UseWebcamReturn {
       };
 
       try {
+        if (recorder.state === 'recording') {
+          recorder.requestData();
+        }
         recorder.stop();
       } catch (err) {
         console.warn('Error stopping MediaRecorder:', err);

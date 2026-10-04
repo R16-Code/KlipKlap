@@ -18,6 +18,10 @@ interface BoothState {
   // Studio Preview Mode ('photo' = static photo strip, 'motion' = live moving photostrip)
   previewMode: StudioPreviewMode;
   setPreviewMode: (mode: StudioPreviewMode) => void;
+  isExportingVideo: boolean;
+  setIsExportingVideo: (exporting: boolean) => void;
+  studioVideoElements: Map<number, HTMLVideoElement> | null;
+  setStudioVideoElements: (elements: Map<number, HTMLVideoElement> | null) => void;
 
   // Layout selection
   layout: LayoutType;
@@ -80,6 +84,10 @@ export const useBoothStore = create<BoothState>((set, get) => ({
 
   previewMode: 'photo',
   setPreviewMode: (mode) => set({ previewMode: mode }),
+  isExportingVideo: false,
+  setIsExportingVideo: (isExportingVideo) => set({ isExportingVideo }),
+  studioVideoElements: null,
+  setStudioVideoElements: (studioVideoElements) => set({ studioVideoElements }),
 
   layout: 'strip_1x4',
   setLayout: (layout) => {

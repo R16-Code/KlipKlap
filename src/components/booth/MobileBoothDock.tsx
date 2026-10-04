@@ -69,17 +69,12 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({
       setCurrentPoseIndex(pose);
 
       setCaptureState('countdown');
-      let isRecordingStarted = false;
+      if (startVideoRecording) {
+        startVideoRecording();
+      }
 
       for (let sec = timerDuration; sec > 0; sec--) {
         setCountdownValue(sec);
-        // Start recording live motion clip (captures up to last 4s of posing)
-        if (!isRecordingStarted && (sec <= 4 || timerDuration <= 4)) {
-          if (startVideoRecording) {
-            startVideoRecording();
-          }
-          isRecordingStarted = true;
-        }
         studioAudio.playCountdownTick(false);
         await sleep(1000);
       }

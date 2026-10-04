@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check, Sparkles } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
-import { composePhotostrip } from '../../utils/canvasComposer';
+import { getLayoutDimensions, loadImage, renderPhotostripSync } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
 
 interface EditorCanvasProps {
@@ -11,6 +11,8 @@ interface EditorCanvasProps {
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const videoElementsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
+  const preloadedImagesRef = useRef<Map<number, HTMLImageElement>>(new Map());
+  const [imagesLoadedKey, setImagesLoadedKey] = useState<number>(0);
 
   const {
     capturedPhotos,
@@ -23,6 +25,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     swapPhotos,
     previewMode,
     setPreviewMode,
+    setStudioVideoElements,
   } = useBoothStore();
 
   const [selectedSwapIndex, setSelectedSwapIndex] = useState<number | null>(null);
@@ -46,100 +49,148 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     }
   };
 
-  // Manage video elements for Live Motion mode
+  // Keep studio video elements registered in global store for export reuse
   useEffect(() => {
-    const currentMap = videoElementsRef.current;
+    setStudioVideoElements(videoElementsRef.current);
+    return () => {
+      setStudioVideoElements(null);
+    };
+  }, [capturedPhotos, setStudioVideoElements]);
 
-    if (previewMode !== 'motion') {
-      currentMap.forEach((v) => {
+  // Preload photo images once whenever capturedPhotos changes
+  useEffect(() => {
+    let isCurrent = true;
+    const map = new Map<number, HTMLImageElement>();
+
+    Promise.all(
+      capturedPhotos.map(async (photo) => {
         try {
-          v.pause();
+          const img = await loadImage(photo.dataUrl);
+          if (isCurrent) {
+            map.set(photo.poseIndex, img);
+          }
         } catch {
-          // ignore
+          // ignore load failure
         }
-      });
-      return;
-    }
-
-    capturedPhotos.forEach((photo) => {
-      if (!photo.videoUrl) return;
-
-      let v = currentMap.get(photo.poseIndex);
-      if (!v || v.src !== photo.videoUrl) {
-        v = document.createElement('video');
-        v.src = photo.videoUrl;
-        v.crossOrigin = 'anonymous';
-        v.muted = true;
-        v.loop = true;
-        v.playsInline = true;
-        v.autoplay = true;
-        currentMap.set(photo.poseIndex, v);
+      })
+    ).then(() => {
+      if (isCurrent) {
+        preloadedImagesRef.current = map;
+        setImagesLoadedKey((k) => k + 1);
       }
-      v.play().catch(() => {});
     });
 
     return () => {
-      currentMap.forEach((v) => {
+      isCurrent = false;
+    };
+  }, [capturedPhotos]);
+
+  // Synchronize playback of in-DOM video elements with previewMode
+  useEffect(() => {
+    if (previewMode === 'motion') {
+      videoElementsRef.current.forEach((v) => {
+        v.play().catch(() => {});
+      });
+    } else {
+      videoElementsRef.current.forEach((v) => {
         try {
           v.pause();
         } catch {
           // ignore
         }
       });
-    };
-  }, [capturedPhotos, previewMode]);
+    }
+  }, [previewMode]);
 
-  // Re-compose photostrip onto canvas (single frame for photo, animation loop for live motion)
+  // Re-compose photostrip onto canvas (single synchronous draw for photo, 60fps rAF loop for motion)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let isMounted = true;
-    let animationFrameId: number;
-
     const dpr = typeof window !== 'undefined' ? Math.max(window.devicePixelRatio || 1, 2) : 2;
     const previewScale = Math.min(dpr, 2.5);
+    const dim = getLayoutDimensions(layout, previewScale);
+
+    if (canvas.width !== dim.width || canvas.height !== dim.height) {
+      canvas.width = dim.width;
+      canvas.height = dim.height;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     if (previewMode === 'motion') {
-      const loop = async () => {
+      let isMounted = true;
+      let animationFrameId: number;
+
+      // Start all in-DOM video elements playing
+      videoElementsRef.current.forEach((v) => {
+        v.play().catch(() => {});
+      });
+
+      const loop = () => {
         if (!isMounted) return;
 
-        await composePhotostrip(canvas, {
+        // When video export is active, pause preview loop to dedicate 100% CPU/GPU to export
+        if (useBoothStore.getState().isExportingVideo) {
+          animationFrameId = requestAnimationFrame(loop);
+          return;
+        }
+
+        renderPhotostripSync(
+          ctx,
+          dim,
+          {
+            photos: capturedPhotos,
+            layout,
+            frameId: selectedFrame,
+            filter: selectedFilter,
+            settings: studioSettings,
+            scale: previewScale,
+            previewMode: 'motion',
+          },
+          preloadedImagesRef.current,
+          videoElementsRef.current
+        );
+
+        animationFrameId = requestAnimationFrame(loop);
+      };
+
+      animationFrameId = requestAnimationFrame(loop);
+
+      return () => {
+        isMounted = false;
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+      };
+    } else {
+      // Synchronous photo rendering
+      renderPhotostripSync(
+        ctx,
+        dim,
+        {
           photos: capturedPhotos,
           layout,
           frameId: selectedFrame,
           filter: selectedFilter,
           settings: studioSettings,
           scale: previewScale,
-          previewMode: 'motion',
-          videoElements: videoElementsRef.current,
-        });
-
-        if (isMounted) {
-          animationFrameId = requestAnimationFrame(loop);
-        }
-      };
-
-      animationFrameId = requestAnimationFrame(loop);
-    } else {
-      composePhotostrip(canvas, {
-        photos: capturedPhotos,
-        layout,
-        frameId: selectedFrame,
-        filter: selectedFilter,
-        settings: studioSettings,
-        scale: previewScale,
-        previewMode: 'photo',
-      });
+          previewMode: 'photo',
+        },
+        preloadedImagesRef.current,
+        videoElementsRef.current
+      );
     }
-
-    return () => {
-      isMounted = false;
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, [capturedPhotos, layout, selectedFrame, selectedFilter, studioSettings, previewMode]);
+  }, [
+    capturedPhotos,
+    layout,
+    selectedFrame,
+    selectedFilter,
+    studioSettings,
+    previewMode,
+    imagesLoadedKey,
+  ]);
 
   return (
     <div className="w-full min-h-full flex flex-col items-center justify-center p-1 sm:p-3 select-none relative overflow-y-auto lg:overflow-hidden no-scrollbar">
@@ -327,6 +378,47 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
           {/* Glossy Paper Sheen Overlay (Korean Photostrip paper finish) */}
           <div className="absolute inset-0 pointer-events-none rounded-xl sm:rounded-2xl bg-gradient-to-tr from-transparent via-white/[0.04] to-white/[0.12]" />
         </div>
+      </div>
+
+      {/* Active in-DOM video elements for Live Motion GPU decoding (non-throttled by browser) */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '320px',
+          height: '240px',
+          zIndex: -9999,
+          opacity: 0.01,
+          pointerEvents: 'none',
+          overflow: 'hidden',
+        }}
+        aria-hidden="true"
+      >
+        {capturedPhotos.map((photo) =>
+          photo.videoUrl ? (
+            <video
+              key={`${photo.id}_${photo.videoUrl}`}
+              ref={(el) => {
+                if (el) {
+                  videoElementsRef.current.set(photo.poseIndex, el);
+                  if (previewMode === 'motion') {
+                    el.play().catch(() => {});
+                  }
+                } else {
+                  videoElementsRef.current.delete(photo.poseIndex);
+                }
+              }}
+              src={photo.videoUrl}
+              style={{ width: '320px', height: '240px', objectFit: 'cover' }}
+              autoPlay
+              loop
+              muted
+              playsInline
+              crossOrigin="anonymous"
+            />
+          ) : null
+        )}
       </div>
     </div>
   );
