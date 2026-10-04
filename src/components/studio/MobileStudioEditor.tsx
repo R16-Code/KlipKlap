@@ -7,6 +7,9 @@ import {
   Sparkles,
   Type,
   ChevronDown,
+  ChevronUp,
+  X,
+  ArrowRight,
   Check,
   Calendar,
   ShieldCheck,
@@ -17,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS } from '../../utils/constants';
-import { downloadHighResPhotostrip, downloadLiveMotionVideo } from '../../utils/canvasComposer';
+import { downloadHighResPhotostrip, downloadLiveMotionGIF, downloadLiveMotionMP4 } from '../../utils/canvasComposer';
 import { EditorCanvas } from './EditorCanvas';
 import { SlotCalibrator } from './SlotCalibrator';
 import confetti from 'canvas-confetti';
@@ -37,6 +40,9 @@ export const MobileStudioEditor: React.FC = () => {
     setCurrentStep,
     resetSession,
     setPreviewMode,
+    timerDuration,
+    studioVideoElements,
+    setIsExportingVideo: setGlobalIsExportingVideo,
   } = useBoothStore();
 
   const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'filters' | 'caption' | null>(null);
@@ -46,6 +52,8 @@ export const MobileStudioEditor: React.FC = () => {
   const [videoProgress, setVideoProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [videoSuccess, setVideoSuccess] = useState(false);
+  const [activeFormat, setActiveFormat] = useState<'mp4' | 'gif' | null>(null);
+  const [isMotionModalOpen, setIsMotionModalOpen] = useState(false);
 
   const layoutKeys: LayoutType[] = [
     'strip_1x4',
@@ -114,31 +122,38 @@ export const MobileStudioEditor: React.FC = () => {
     }
   };
 
-  const handleDownloadMotion = async () => {
+  const handleDownloadMotion = async (format: 'mp4' | 'gif') => {
     if (isExporting || isExportingVideo || capturedPhotos.length === 0) return;
 
     if (isIncomplete) {
       const proceed = window.confirm(
-        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor video Live Motion sekarang?`
+        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor Live Motion (${format.toUpperCase()}) sekarang?`
       );
       if (!proceed) return;
     }
 
     try {
+      setActiveFormat(format);
       setIsExportingVideo(true);
+      setGlobalIsExportingVideo(true);
       setVideoProgress(0);
       setPreviewMode('motion');
 
-      await downloadLiveMotionVideo(
-        {
-          photos: capturedPhotos,
-          layout,
-          frameId: selectedFrame,
-          filter: selectedFilter,
-          settings: studioSettings,
-        },
-        (progress) => setVideoProgress(progress)
-      );
+      const exportOptions = {
+        photos: capturedPhotos,
+        layout,
+        frameId: selectedFrame,
+        filter: selectedFilter,
+        settings: studioSettings,
+        durationSeconds: timerDuration,
+        videoElements: studioVideoElements || undefined,
+      };
+
+      if (format === 'mp4') {
+        await downloadLiveMotionMP4(exportOptions, (progress) => setVideoProgress(progress));
+      } else {
+        await downloadLiveMotionGIF(exportOptions, (progress) => setVideoProgress(progress));
+      }
 
       setVideoSuccess(true);
       confetti({
@@ -148,12 +163,16 @@ export const MobileStudioEditor: React.FC = () => {
         colors: ['#F59E0B', '#E65D47', '#3B82F6', '#10B981'],
       });
 
-      setTimeout(() => setVideoSuccess(false), 3500);
+      setTimeout(() => {
+        setVideoSuccess(false);
+        setActiveFormat(null);
+      }, 3500);
     } catch (err) {
-      console.error('Failed to export Live Motion video:', err);
-      alert('Gagal mengekspor video Live Motion. Pastikan browser mendukung MediaRecorder.');
+      console.error(`Failed to export Live Motion ${format.toUpperCase()}:`, err);
+      alert(`Gagal mengekspor Live Motion ${format.toUpperCase()}.`);
     } finally {
       setIsExportingVideo(false);
+      setGlobalIsExportingVideo(false);
     }
   };
 
@@ -539,22 +558,26 @@ export const MobileStudioEditor: React.FC = () => {
               )}
             </button>
 
-            {/* Button 2: Download Live Motion (MP4) */}
+            {/* Button 2: Download Live Motion (Modal Trigger for MP4 or GIF) */}
             <button
               type="button"
               disabled={isExporting || isExportingVideo}
-              onClick={handleDownloadMotion}
+              onClick={() => {
+                if (!isExporting && !isExportingVideo) {
+                  setIsMotionModalOpen(true);
+                }
+              }}
               className={`flex-1 py-3 min-h-[46px] px-2 rounded-2xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] border ${
                 videoSuccess
                   ? 'bg-emerald-600 text-white border-emerald-600'
                   : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-950 border-amber-300/80'
               }`}
-              title="Download video Live Motion MP4"
+              title="Download photostrip Live Motion (Pilih MP4 atau GIF)"
             >
               {isExportingVideo ? (
                 <>
                   <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
-                  <span className="text-[11px]">MP4 ({videoProgress}%)...</span>
+                  <span className="text-[11px]">{activeFormat === 'mp4' ? 'MP4' : 'GIF'} ({videoProgress}%)...</span>
                 </>
               ) : videoSuccess ? (
                 <>
@@ -565,12 +588,104 @@ export const MobileStudioEditor: React.FC = () => {
                 <>
                   <Video className="w-4 h-4 text-amber-600" />
                   <span className="text-[11px]">Live Motion</span>
+                  <ChevronUp className="w-3.5 h-3.5 text-amber-700 ml-0.5" />
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Bottom Sheet Modal for Mobile Live Motion Format Selection */}
+      {isMotionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0"
+            onClick={() => setIsMotionModalOpen(false)}
+          />
+          <div className="relative w-full max-w-sm mx-auto bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl z-10 space-y-3 animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200/80">
+              <div>
+                <h3 className="text-sm font-bold text-studio-graphite">Pilih Format Live Motion</h3>
+                <p className="text-[11px] text-stone-600">Pilih format sesuai kebutuhan sosial media Anda</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMotionModalOpen(false)}
+                className="p-1 rounded-full text-stone-600 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {/* Option 1: MP4 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMotionModalOpen(false);
+                  handleDownloadMotion('mp4');
+                }}
+                className="w-full text-left p-3 rounded-2xl border border-stone-200/90 hover:border-amber-400 bg-amber-500/5 hover:bg-amber-500/10 transition-all flex items-center justify-between active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Video className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                      <span>Video MP4</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        Instagram & TikTok
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-stone-600 mt-0.5">
+                      HD 24 FPS mulus, pas untuk Story & Reels
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-amber-700" />
+              </button>
+
+              {/* Option 2: GIF */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMotionModalOpen(false);
+                  handleDownloadMotion('gif');
+                }}
+                className="w-full text-left p-3 rounded-2xl border border-stone-200/90 hover:border-amber-400 bg-amber-500/5 hover:bg-amber-500/10 transition-all flex items-center justify-between active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                      <span>Animasi GIF</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                        WhatsApp & X
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-stone-600 mt-0.5">
+                      Looping terus-menerus, pas untuk chat WA
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-amber-700" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsMotionModalOpen(false)}
+              className="w-full py-2.5 rounded-xl border border-stone-200 text-xs font-semibold text-stone-600 hover:bg-stone-50"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

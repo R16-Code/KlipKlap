@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, ShieldCheck, Trash2, AlertTriangle, Video } from 'lucide-react';
+import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, ShieldCheck, Trash2, AlertTriangle, Video, ChevronDown, ArrowRight } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
-import { downloadHighResPhotostrip, downloadLiveMotionVideo } from '../../utils/canvasComposer';
+import { downloadHighResPhotostrip, downloadLiveMotionGIF, downloadLiveMotionMP4 } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS } from '../../utils/constants';
 import confetti from 'canvas-confetti';
 
@@ -16,6 +16,9 @@ export const ExportSidebar: React.FC = () => {
     setCurrentStep,
     resetSession,
     setPreviewMode,
+    timerDuration,
+    studioVideoElements,
+    setIsExportingVideo: setGlobalIsExportingVideo,
   } = useBoothStore();
 
   const [isExporting, setIsExporting] = useState(false);
@@ -23,6 +26,8 @@ export const ExportSidebar: React.FC = () => {
   const [videoProgress, setVideoProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [videoSuccess, setVideoSuccess] = useState(false);
+  const [activeFormat, setActiveFormat] = useState<'mp4' | 'gif' | null>(null);
+  const [isMotionDropdownOpen, setIsMotionDropdownOpen] = useState(false);
 
   const layoutConfig = LAYOUT_CONFIGS[layout];
   const requiredPhotos = layoutConfig.photoCount;
@@ -70,31 +75,38 @@ export const ExportSidebar: React.FC = () => {
     }
   };
 
-  const handleDownloadMotion = async () => {
+  const handleDownloadMotion = async (format: 'mp4' | 'gif') => {
     if (isExporting || isExportingVideo || capturedPhotos.length === 0) return;
 
     if (isIncomplete) {
       const proceed = window.confirm(
-        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor video Live Motion sekarang?`
+        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor Live Motion (${format.toUpperCase()}) sekarang?`
       );
       if (!proceed) return;
     }
 
     try {
+      setActiveFormat(format);
       setIsExportingVideo(true);
+      setGlobalIsExportingVideo(true);
       setVideoProgress(0);
       setPreviewMode('motion');
 
-      await downloadLiveMotionVideo(
-        {
-          photos: capturedPhotos,
-          layout,
-          frameId: selectedFrame,
-          filter: selectedFilter,
-          settings: studioSettings,
-        },
-        (progress) => setVideoProgress(progress)
-      );
+      const exportOptions = {
+        photos: capturedPhotos,
+        layout,
+        frameId: selectedFrame,
+        filter: selectedFilter,
+        settings: studioSettings,
+        durationSeconds: timerDuration,
+        videoElements: studioVideoElements || undefined,
+      };
+
+      if (format === 'mp4') {
+        await downloadLiveMotionMP4(exportOptions, (progress) => setVideoProgress(progress));
+      } else {
+        await downloadLiveMotionGIF(exportOptions, (progress) => setVideoProgress(progress));
+      }
 
       setVideoSuccess(true);
       confetti({
@@ -106,12 +118,14 @@ export const ExportSidebar: React.FC = () => {
 
       setTimeout(() => {
         setVideoSuccess(false);
+        setActiveFormat(null);
       }, 4000);
     } catch (err) {
-      console.error('Failed to export Live Motion video:', err);
-      alert('Gagal mengekspor video Live Motion. Pastikan browser mendukung MediaRecorder.');
+      console.error(`Failed to export Live Motion ${format.toUpperCase()}:`, err);
+      alert(`Gagal mengekspor Live Motion ${format.toUpperCase()}.`);
     } finally {
       setIsExportingVideo(false);
+      setGlobalIsExportingVideo(false);
     }
   };
 
@@ -272,35 +286,117 @@ export const ExportSidebar: React.FC = () => {
           )}
         </button>
 
-        {/* Action Button 2: Download Live Motion (MP4) */}
-        <button
-          type="button"
-          disabled={isExporting || isExportingVideo}
-          onClick={handleDownloadMotion}
-          className={`w-full py-3 px-4 rounded-2xl text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] border ${
-            videoSuccess
-              ? 'bg-emerald-600 text-white border-emerald-600'
-              : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border-amber-400/50'
-          }`}
-          title="Download photostrip bergerak berformat video MP4"
-        >
-          {isExportingVideo ? (
+        {/* Action Button 2: Download Live Motion with Dropdown (MP4 or GIF) */}
+        <div className="relative">
+          <button
+            type="button"
+            disabled={isExporting || isExportingVideo}
+            onClick={() => setIsMotionDropdownOpen((prev) => !prev)}
+            className={`w-full py-3 px-4 rounded-2xl text-xs font-bold tracking-wider uppercase flex items-center justify-between transition-all shadow-md active:scale-[0.98] border ${
+              videoSuccess
+                ? 'bg-emerald-600 text-white border-emerald-600'
+                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border-amber-400/50'
+            }`}
+            title="Download photostrip Live Motion (Pilih MP4 atau GIF)"
+          >
+            {isExportingVideo ? (
+              <div className="flex items-center justify-center gap-2 w-full">
+                <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
+                <span>
+                  {activeFormat === 'mp4' ? 'Membuat MP4' : 'Membuat GIF'} ({videoProgress}%)...
+                </span>
+              </div>
+            ) : videoSuccess ? (
+              <div className="flex items-center justify-center gap-2 w-full">
+                <Check className="w-4 h-4 text-white" />
+                <span>{activeFormat === 'mp4' ? 'Video MP4' : 'Live Motion GIF'} Tersimpan!</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-amber-600" />
+                  <span>Download Live Motion</span>
+                </div>
+                <ChevronDown
+                  className={`w-4 h-4 text-amber-700 transition-transform duration-200 ${
+                    isMotionDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </>
+            )}
+          </button>
+
+          {/* Dropdown Menu */}
+          {isMotionDropdownOpen && !isExportingVideo && (
             <>
-              <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
-              <span>Merekam Video MP4 ({videoProgress}%)...</span>
-            </>
-          ) : videoSuccess ? (
-            <>
-              <Check className="w-4 h-4 text-white" />
-              <span>Video MP4 Tersimpan!</span>
-            </>
-          ) : (
-            <>
-              <Video className="w-4 h-4 text-amber-600" />
-              <span>Download Live Motion (MP4)</span>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setIsMotionDropdownOpen(false)}
+              />
+              <div className="absolute bottom-full mb-2 left-0 right-0 z-50 bg-white/95 backdrop-blur-md rounded-2xl p-2 border border-amber-200 shadow-xl space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-2.5 py-1 text-[10px] font-bold text-stone-500 uppercase tracking-wider">
+                  Pilih Format Live Motion
+                </div>
+
+                {/* Option 1: MP4 Video */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMotionDropdownOpen(false);
+                    handleDownloadMotion('mp4');
+                  }}
+                  className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 transition-colors flex items-center justify-between group border border-transparent hover:border-amber-300/60"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                      <Video className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                        <span>Video MP4</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800">
+                          IG & TikTok
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-stone-600">
+                        HD 24 FPS mulus untuk Story & Reels
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-stone-300 group-hover:text-amber-700 transition-colors" />
+                </button>
+
+                {/* Option 2: GIF Animation */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMotionDropdownOpen(false);
+                    handleDownloadMotion('gif');
+                  }}
+                  className="w-full text-left p-2.5 rounded-xl hover:bg-amber-500/10 transition-colors flex items-center justify-between group border border-transparent hover:border-amber-300/60"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-700 flex items-center justify-center shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                        <span>Animasi GIF</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800">
+                          WhatsApp & X
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-stone-600">
+                        Looping otomatis untuk chat & WA
+                      </p>
+                    </div>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-stone-300 group-hover:text-amber-700 transition-colors" />
+                </button>
+              </div>
             </>
           )}
-        </button>
+        </div>
 
         {/* Clear Photos / End Session Button */}
         <button

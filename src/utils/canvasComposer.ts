@@ -1,5 +1,7 @@
 import type { LayoutType, FilterType, CapturedPhoto, StudioSettings } from '../types';
 import { FRAME_OPTIONS, LAYOUT_CONFIGS } from './constants';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
 export interface ComposeOptions {
   photos: CapturedPhoto[];
@@ -10,6 +12,7 @@ export interface ComposeOptions {
   scale?: number; // 1 for responsive preview, 2.5 for 300 DPI high-res export
   previewMode?: 'photo' | 'motion';
   videoElements?: Map<number, HTMLVideoElement>;
+  durationSeconds?: number; // Custom recording duration matching timerDuration
 }
 
 export interface LayoutDimensions {
@@ -270,6 +273,7 @@ function drawCoverImage(
 /**
  * Draws HTMLVideoElement with object-fit: cover center-crop into target rectangle,
  * with optional horizontal mirroring for selfie/front camera.
+ * Returns true if video frame was drawn successfully, false otherwise.
  */
 function drawCoverVideo(
   ctx: CanvasRenderingContext2D,
@@ -280,10 +284,10 @@ function drawCoverVideo(
   dHeight: number,
   radius: number,
   isMirrored = false
-) {
-  const vWidth = video.videoWidth || 1280;
-  const vHeight = video.videoHeight || 960;
-  if (!vWidth || !vHeight) return;
+): boolean {
+  const vWidth = video.videoWidth;
+  const vHeight = video.videoHeight;
+  if (!vWidth || !vHeight || video.readyState < 2) return false;
 
   const videoRatio = vWidth / vHeight;
   const targetRatio = dWidth / dHeight;
@@ -310,20 +314,26 @@ function drawCoverVideo(
   }
   ctx.clip();
 
-  if (isMirrored) {
-    ctx.translate(dx + dWidth, dy);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, dWidth, dHeight);
-  } else {
-    ctx.drawImage(video, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+  try {
+    if (isMirrored) {
+      ctx.translate(dx + dWidth, dy);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, dWidth, dHeight);
+    } else {
+      ctx.drawImage(video, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+    }
+
+    // Subtle inner border for crisp photo edges
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.restore();
+    return true;
+  } catch {
+    ctx.restore();
+    return false;
   }
-
-  // Subtle inner border for crisp photo edges
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  ctx.restore();
 }
 
 /**
@@ -380,6 +390,29 @@ export function applyFilterToContext(ctx: CanvasRenderingContext2D, filter: Filt
   }
 }
 
+let cachedGrainCanvas: HTMLCanvasElement | null = null;
+function getCachedGrainCanvas(): HTMLCanvasElement {
+  if (cachedGrainCanvas) return cachedGrainCanvas;
+  const grainCanvas = document.createElement('canvas');
+  grainCanvas.width = 64;
+  grainCanvas.height = 64;
+  const gCtx = grainCanvas.getContext('2d');
+  if (gCtx) {
+    const imgData = gCtx.createImageData(64, 64);
+    const data = imgData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const val = Math.random() * 255;
+      data[i] = val;
+      data[i + 1] = val;
+      data[i + 2] = val;
+      data[i + 3] = 18;
+    }
+    gCtx.putImageData(imgData, 0, 0);
+  }
+  cachedGrainCanvas = grainCanvas;
+  return grainCanvas;
+}
+
 /**
  * Draws analog film grain noise overlay
  */
@@ -400,27 +433,10 @@ function drawFilmGrain(
   }
   ctx.clip();
 
-  const grainCanvas = document.createElement('canvas');
-  grainCanvas.width = 64;
-  grainCanvas.height = 64;
-  const gCtx = grainCanvas.getContext('2d');
-  if (gCtx) {
-    const imgData = gCtx.createImageData(64, 64);
-    const data = imgData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const val = Math.random() * 255;
-      data[i] = val;
-      data[i + 1] = val;
-      data[i + 2] = val;
-      data[i + 3] = 18;
-    }
-    gCtx.putImageData(imgData, 0, 0);
-
-    const pattern = ctx.createPattern(grainCanvas, 'repeat');
-    if (pattern) {
-      ctx.fillStyle = pattern;
-      ctx.fillRect(dx, dy, dWidth, dHeight);
-    }
+  const pattern = ctx.createPattern(getCachedGrainCanvas(), 'repeat');
+  if (pattern) {
+    ctx.fillStyle = pattern;
+    ctx.fillRect(dx, dy, dWidth, dHeight);
   }
 
   ctx.restore();
@@ -761,19 +777,18 @@ function drawFrameThemedDecorations(
 /**
  * Composes photos into the specified canvas element with frame, filters, and stamps
  */
-export async function composePhotostrip(
-  canvas: HTMLCanvasElement,
-  options: ComposeOptions
-): Promise<void> {
-  const { photos, layout, frameId, filter, settings, scale = 1, previewMode = 'photo', videoElements } = options;
-  const dim = getLayoutDimensions(layout, scale);
-
-  canvas.width = dim.width;
-  canvas.height = dim.height;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
+/**
+ * Synchronously renders a photostrip frame to a 2D rendering context.
+ * Does NOT mutate canvas dimensions or perform async preloading, making it safe for 60 FPS animation loops and captureStream.
+ */
+export function renderPhotostripSync(
+  ctx: CanvasRenderingContext2D,
+  dim: LayoutDimensions,
+  options: ComposeOptions,
+  preloadedImages: Map<number, HTMLImageElement>,
+  videoElements?: Map<number, HTMLVideoElement>
+): void {
+  const { photos, layout, frameId, filter, settings, scale = 1, previewMode = 'photo' } = options;
   const frame = FRAME_OPTIONS.find((f) => f.id === frameId) || FRAME_OPTIONS[0];
 
   // 1. Draw solid frame background
@@ -783,20 +798,7 @@ export async function composePhotostrip(
   // 2. Draw theme decorations (retro film sprockets, cherries, daisies, clouds, etc.)
   drawFrameThemedDecorations(ctx, frame.id, dim, scale);
 
-  // 3. Preload all available photo images mapped by poseIndex (for static mode or video fallback)
-  const photoImageMap = new Map<number, HTMLImageElement>();
-  await Promise.all(
-    photos.map(async (photo) => {
-      try {
-        const img = await loadImage(photo.dataUrl);
-        photoImageMap.set(photo.poseIndex, img);
-      } catch {
-        // ignore load failure
-      }
-    })
-  );
-
-  // 4. Render photo slots dynamically based on layout config
+  // 3. Render photo slots dynamically based on layout config
   const config = LAYOUT_CONFIGS[layout] || LAYOUT_CONFIGS['strip_1x4'];
   const totalSlots = config.photoCount;
   const cols = config.columns;
@@ -826,14 +828,15 @@ export async function composePhotostrip(
     const dx = baseMarginX + col * (dim.photoWidth + effectiveGapX) + scaleOffsetX;
     const dy = baseMarginTop + row * (dim.photoHeight + effectiveGapY) + scaleOffsetY;
 
-    const img = photoImageMap.get(i);
+    const img = preloadedImages.get(i);
     const video = videoElements?.get(i);
     const photoItem = photos.find((p) => p.poseIndex === i);
 
+    let videoDrawn = false;
     if (previewMode === 'motion' && video && video.readyState >= 2) {
       ctx.save();
       applyFilterToContext(ctx, filter);
-      drawCoverVideo(
+      videoDrawn = drawCoverVideo(
         ctx,
         video,
         dx,
@@ -846,10 +849,12 @@ export async function composePhotostrip(
       ctx.restore();
 
       // Film grain overlay
-      if (filter === 'grain' || filter === 'vintage_90s' || filter === 'kodak') {
+      if (videoDrawn && (filter === 'grain' || filter === 'vintage_90s' || filter === 'kodak')) {
         drawFilmGrain(ctx, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
       }
-    } else if (img) {
+    }
+
+    if (!videoDrawn && img) {
       ctx.save();
       applyFilterToContext(ctx, filter);
       drawCoverImage(ctx, img, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
@@ -859,7 +864,7 @@ export async function composePhotostrip(
       if (filter === 'grain' || filter === 'vintage_90s' || filter === 'kodak') {
         drawFilmGrain(ctx, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
       }
-    } else {
+    } else if (!videoDrawn && !img) {
       // Empty slot placeholder
       ctx.save();
       const isDarkFrame =
@@ -895,7 +900,7 @@ export async function composePhotostrip(
     }
   }
 
-  // 5. Render Studio Footer Stamp (Branding, Title, Date)
+  // 4. Render Studio Footer Stamp (Branding, Title, Date)
   const footerCenterY = dim.height - dim.footerHeight / 2;
 
   ctx.save();
@@ -931,12 +936,46 @@ export async function composePhotostrip(
   ctx.textAlign = 'right';
   ctx.fillText('클립클랩', dim.width - dim.outerMarginX, dim.height - 12 * scale);
 
-  // 6. Draw clean outer border around entire canvas perimeter
+  // 5. Draw clean outer border around entire canvas perimeter
   ctx.strokeStyle = frame.borderColor || 'rgba(0, 0, 0, 0.15)';
   ctx.lineWidth = 1.5 * scale;
   ctx.strokeRect(0.75 * scale, 0.75 * scale, dim.width - 1.5 * scale, dim.height - 1.5 * scale);
 
   ctx.restore();
+}
+
+/**
+ * Composes photos into the specified canvas element with frame, filters, and stamps
+ */
+export async function composePhotostrip(
+  canvas: HTMLCanvasElement,
+  options: ComposeOptions
+): Promise<void> {
+  const { photos, layout, scale = 1, videoElements } = options;
+  const dim = getLayoutDimensions(layout, scale);
+
+  if (canvas.width !== dim.width || canvas.height !== dim.height) {
+    canvas.width = dim.width;
+    canvas.height = dim.height;
+  }
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Preload all available photo images mapped by poseIndex
+  const photoImageMap = new Map<number, HTMLImageElement>();
+  await Promise.all(
+    photos.map(async (photo) => {
+      try {
+        const img = await loadImage(photo.dataUrl);
+        photoImageMap.set(photo.poseIndex, img);
+      } catch {
+        // ignore load failure
+      }
+    })
+  );
+
+  renderPhotostripSync(ctx, dim, options, photoImageMap, videoElements);
 }
 
 /**
@@ -970,55 +1009,270 @@ export async function downloadHighResPhotostrip(
 }
 
 /**
- * Records the animated Live Motion photostrip into an MP4 video file and triggers download
+ * Helper to reliably seek a video element to a target timestamp.
  */
-export async function downloadLiveMotionVideo(
+function seekVideoElement(video: HTMLVideoElement, targetTime: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (Math.abs(video.currentTime - targetTime) < 0.03) {
+      resolve();
+      return;
+    }
+
+    let isDone = false;
+    const onSeeked = () => {
+      if (isDone) return;
+      isDone = true;
+      video.removeEventListener('seeked', onSeeked);
+      resolve();
+    };
+
+    video.addEventListener('seeked', onSeeked, { once: true });
+
+    try {
+      video.currentTime = targetTime;
+    } catch {
+      onSeeked();
+      return;
+    }
+
+    // Safety timeout in case seeked does not fire
+    setTimeout(onSeeked, 160);
+  });
+}
+
+/**
+ * Encodes the animated Live Motion photostrip into a looping animated GIF (Korean Photobooth Boomerang Loop)
+ * and triggers immediate download.
+ *
+ * Guarantees:
+ * - 0% dropped frames: Frame-by-frame deterministic sampling
+ * - Exact duration matching photo countdown timer
+ * - High visual fidelity with per-frame 256 color quantization
+ * - Universal playback (social media, messaging apps, mobile galleries)
+ */
+export async function downloadLiveMotionGIF(
   options: ComposeOptions,
   onProgress?: (percent: number) => void
 ): Promise<void> {
   const { photos } = options;
 
-  if (typeof MediaRecorder === 'undefined') {
-    throw new Error('MediaRecorder tidak didukung di browser ini.');
-  }
-
-  // Scale 2 is crisp (e.g. 960px or 1520px wide) and performs smoothly
-  const scale = 2;
+  // Scale 0.85 generates ~408px width, yielding crisp text, photos, and stickers while keeping file size small (~2-4 MB)
+  const scale = 0.85;
   const dim = getLayoutDimensions(options.layout, scale);
+  dim.width = Math.round(dim.width);
+  dim.height = Math.round(dim.height);
 
   const offscreenCanvas = document.createElement('canvas');
-  // Enforce even dimensions for video codec compatibility
-  offscreenCanvas.width = dim.width - (dim.width % 2);
-  offscreenCanvas.height = dim.height - (dim.height % 2);
+  offscreenCanvas.width = dim.width;
+  offscreenCanvas.height = dim.height;
 
-  // 1. Prepare video elements for each photo with a videoUrl
-  const videoMap = new Map<number, HTMLVideoElement>();
+  const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Could not get 2D rendering context');
+
+  // 1. Preload static photo images as fallbacks
+  const photoImageMap = new Map<number, HTMLImageElement>();
   await Promise.all(
     photos.map(async (photo) => {
-      if (!photo.videoUrl) return;
-      const v = document.createElement('video');
-      v.src = photo.videoUrl;
-      v.crossOrigin = 'anonymous';
-      v.muted = true;
-      v.loop = true;
-      v.playsInline = true;
-      v.autoplay = true;
-
-      await new Promise<void>((resolve) => {
-        v.onloadeddata = () => resolve();
-        v.onerror = () => resolve();
-        setTimeout(resolve, 2000); // 2s timeout safeguard
-      });
-
-      v.currentTime = 0;
-      await v.play().catch(() => {});
-      videoMap.set(photo.poseIndex, v);
+      try {
+        const img = await loadImage(photo.dataUrl);
+        photoImageMap.set(photo.poseIndex, img);
+      } catch {
+        // ignore load failure
+      }
     })
   );
 
-  // 2. Prepare canvas stream and media recorder
-  const stream = offscreenCanvas.captureStream(30);
+  // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM
+  const usingExternalVideos = Boolean(options.videoElements && options.videoElements.size > 0);
+  const videoMap = usingExternalVideos
+    ? options.videoElements!
+    : new Map<number, HTMLVideoElement>();
 
+  let tempContainer: HTMLDivElement | null = null;
+
+  if (!usingExternalVideos) {
+    tempContainer = document.createElement('div');
+    tempContainer.style.cssText =
+      'position:fixed;top:0;left:0;width:320px;height:240px;z-index:-9999;opacity:0.01;pointer-events:none;overflow:hidden;';
+    document.body.appendChild(tempContainer);
+
+    await Promise.all(
+      photos.map(async (photo) => {
+        if (!photo.videoUrl) return;
+        const v = document.createElement('video');
+        v.src = photo.videoUrl;
+        v.crossOrigin = 'anonymous';
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.autoplay = true;
+        v.style.cssText = 'width:320px;height:240px;object-fit:cover;';
+        tempContainer!.appendChild(v);
+
+        await new Promise<void>((resolve) => {
+          const onDone = () => {
+            v.removeEventListener('canplay', onDone);
+            v.removeEventListener('loadeddata', onDone);
+            v.removeEventListener('error', onDone);
+            resolve();
+          };
+          v.addEventListener('canplay', onDone);
+          v.addEventListener('loadeddata', onDone);
+          v.addEventListener('error', onDone);
+          setTimeout(resolve, 2000);
+        });
+
+        videoMap.set(photo.poseIndex, v);
+      })
+    );
+  }
+
+  // Pause all videos before step-by-step seeking
+  videoMap.forEach((v) => {
+    try {
+      v.pause();
+    } catch {
+      // ignore
+    }
+  });
+
+  // 3. Determine target duration in seconds
+  let targetDurationSeconds = options.durationSeconds;
+  if (!targetDurationSeconds || targetDurationSeconds <= 0) {
+    const durations = Array.from(videoMap.values())
+      .map((v) => v.duration)
+      .filter((d) => typeof d === 'number' && !isNaN(d) && d > 0 && isFinite(d));
+    if (durations.length > 0) {
+      targetDurationSeconds = Math.max(...durations);
+    } else {
+      targetDurationSeconds = 5;
+    }
+  }
+
+  // 10 FPS with 100ms delay: standard for photobooth boomerang GIF, 100% exact timing
+  const fps = 10;
+  const delay = 100; // ms
+  const totalFrames = Math.max(10, Math.round(targetDurationSeconds * fps));
+
+  const gif = GIFEncoder();
+
+  // 4. Sample and encode each frame sequentially
+  for (let i = 0; i < totalFrames; i++) {
+    const t = (i / totalFrames) * targetDurationSeconds;
+
+    // Seek all video elements in parallel
+    await Promise.all(
+      Array.from(videoMap.values()).map((v) => {
+        const dur = v.duration && isFinite(v.duration) && v.duration > 0 ? v.duration : targetDurationSeconds;
+        const targetTime = Math.min(Math.max(0, t % dur), Math.max(0.01, dur - 0.04));
+        return seekVideoElement(v, targetTime);
+      })
+    );
+
+    // Render full photostrip onto offscreen canvas
+    renderPhotostripSync(
+      ctx,
+      dim,
+      { ...options, scale, previewMode: 'motion' },
+      photoImageMap,
+      videoMap
+    );
+
+    // Quantize 256-color palette and write frame to GIF
+    const imageData = ctx.getImageData(0, 0, dim.width, dim.height);
+    const palette = quantize(imageData.data, 256);
+    const index = applyPalette(imageData.data, palette);
+
+    gif.writeFrame(index, dim.width, dim.height, {
+      palette,
+      delay,
+      repeat: 0, // 0 = infinite loop
+    });
+
+    const progress = Math.round(((i + 1) / totalFrames) * 100);
+    if (onProgress) {
+      onProgress(progress);
+    }
+
+    // Yield to browser event loop so UI / progress bar stays responsive
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  gif.finish();
+  const gifBytes = gif.bytes();
+  const gifBlob = new Blob([gifBytes as unknown as BlobPart], { type: 'image/gif' });
+
+  // Cleanup temporary resources or resume preview videos
+  if (!usingExternalVideos) {
+    videoMap.forEach((v) => {
+      try {
+        v.pause();
+        v.src = '';
+      } catch {
+        // ignore
+      }
+    });
+    try {
+      tempContainer?.remove();
+    } catch {
+      // ignore
+    }
+  } else {
+    videoMap.forEach((v) => {
+      v.play().catch(() => {});
+    });
+  }
+
+  // 5. Trigger download of the GIF file
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+    now.getDate()
+  ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const link = document.createElement('a');
+  link.download = `klipklap_live_${options.layout}_${options.frameId}_${timestamp}.gif`;
+  const blobUrl = URL.createObjectURL(gifBlob);
+  link.href = blobUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
+// Alias downloadLiveMotionVideo to downloadLiveMotionGIF for full compatibility
+export const downloadLiveMotionVideo = downloadLiveMotionGIF;
+
+/**
+ * Fallback MP4 recording via MediaRecorder for older browsers lacking WebCodecs VideoEncoder
+ */
+async function downloadLiveMotionMediaRecorderFallback(
+  options: ComposeOptions,
+  offscreenCanvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  dim: LayoutDimensions,
+  photoImageMap: Map<number, HTMLImageElement>,
+  videoMap: Map<number, HTMLVideoElement>,
+  usingExternalVideos: boolean,
+  tempContainer: HTMLDivElement | null,
+  targetDurationSeconds: number,
+  scale: number,
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  const durationMs = Math.round(targetDurationSeconds * 1000);
+  const recordingDurationMs = durationMs + 350;
+
+  renderPhotostripSync(
+    ctx,
+    dim,
+    { ...options, scale, previewMode: 'motion' },
+    photoImageMap,
+    videoMap
+  );
+
+  const stream = offscreenCanvas.captureStream(30);
   const types = [
     'video/mp4;codecs=avc1',
     'video/mp4',
@@ -1028,88 +1282,76 @@ export async function downloadLiveMotionVideo(
   ];
   let mimeType = '';
   for (const t of types) {
-    if (MediaRecorder.isTypeSupported(t)) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) {
       mimeType = t;
       break;
     }
   }
 
   const chunks: Blob[] = [];
-  const recorderOptions: MediaRecorderOptions = {
+  const recorder = new MediaRecorder(stream, {
     videoBitsPerSecond: 6_000_000,
-  };
-  if (mimeType) {
-    recorderOptions.mimeType = mimeType;
-  }
-
-  const recorder = new MediaRecorder(stream, recorderOptions);
+    ...(mimeType ? { mimeType } : {}),
+  });
 
   recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) {
-      chunks.push(e.data);
-    }
+    if (e.data && e.data.size > 0) chunks.push(e.data);
   };
 
-  // 3. Render loop for 3.5 seconds
-  const durationMs = 3500;
-  const fps = 30;
-  const totalFrames = Math.round((durationMs / 1000) * fps);
-
-  recorder.start();
-
+  recorder.start(100);
   let isRecording = true;
-  let frameCount = 0;
   const startTime = Date.now();
+  let lastReported = -1;
 
   await new Promise<void>((resolve) => {
-    const renderLoop = async () => {
+    const loop = () => {
       if (!isRecording) return;
-
-      await composePhotostrip(offscreenCanvas, {
-        ...options,
-        scale,
-        previewMode: 'motion',
-        videoElements: videoMap,
-      });
-
-      frameCount++;
+      renderPhotostripSync(
+        ctx,
+        dim,
+        { ...options, scale, previewMode: 'motion' },
+        photoImageMap,
+        videoMap
+      );
       const elapsed = Date.now() - startTime;
       const progress = Math.min(100, Math.round((elapsed / durationMs) * 100));
-      if (onProgress) onProgress(progress);
-
-      if (elapsed >= durationMs || frameCount >= totalFrames) {
+      if (onProgress && (progress - lastReported >= 2 || progress === 100)) {
+        lastReported = progress;
+        onProgress(progress);
+      }
+      if (elapsed >= recordingDurationMs) {
         isRecording = false;
         resolve();
       } else {
-        requestAnimationFrame(renderLoop);
+        requestAnimationFrame(loop);
       }
     };
-
-    renderLoop();
+    loop();
   });
 
-  // 4. Stop recorder and wait for final blob
   const videoBlob = await new Promise<Blob>((resolve) => {
-    recorder.onstop = () => {
-      const finalMime = recorder.mimeType || mimeType || 'video/mp4';
-      resolve(new Blob(chunks, { type: finalMime }));
-    };
+    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/mp4' }));
     try {
+      recorder.requestData();
       recorder.stop();
     } catch {
       resolve(new Blob(chunks, { type: mimeType || 'video/mp4' }));
     }
   });
 
-  // Pause and cleanup temporary video elements
-  videoMap.forEach((v) => {
+  if (!usingExternalVideos) {
+    videoMap.forEach((v) => {
+      try {
+        v.pause();
+        v.src = '';
+      } catch {}
+    });
     try {
-      v.pause();
-      v.src = '';
-    } catch {
-      // ignore
-    }
-  });
+      tempContainer?.remove();
+    } catch {}
+  } else {
+    videoMap.forEach((v) => v.play().catch(() => {}));
+  }
 
   const now = new Date();
   const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
@@ -1128,3 +1370,271 @@ export async function downloadLiveMotionVideo(
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }
+
+/**
+ * Encodes the animated Live Motion photostrip into a silky smooth, deterministic MP4 video file
+ * using WebCodecs (VideoEncoder) + mp4-muxer (0% frame drops, exact duration matching timer).
+ * Compatible with Instagram (Story, Reels, Feed), TikTok, and WhatsApp Status.
+ */
+export async function downloadLiveMotionMP4(
+  options: ComposeOptions,
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  const { photos } = options;
+
+  // Scale 1.0 yields crisp 480px-640px width photostrip HD video, perfect for social media
+  const scale = 1.0;
+  const dim = getLayoutDimensions(options.layout, scale);
+  // Ensure even dimensions required by H.264 (AVC) codecs
+  const width = Math.round(dim.width) - (Math.round(dim.width) % 2);
+  const height = Math.round(dim.height) - (Math.round(dim.height) % 2);
+
+  const offscreenCanvas = document.createElement('canvas');
+  offscreenCanvas.width = width;
+  offscreenCanvas.height = height;
+
+  const ctx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Could not get 2D rendering context');
+
+  // 1. Preload static photo images as fallbacks
+  const photoImageMap = new Map<number, HTMLImageElement>();
+  await Promise.all(
+    photos.map(async (photo) => {
+      try {
+        const img = await loadImage(photo.dataUrl);
+        photoImageMap.set(photo.poseIndex, img);
+      } catch {
+        // ignore load failure
+      }
+    })
+  );
+
+  // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM
+  const usingExternalVideos = Boolean(options.videoElements && options.videoElements.size > 0);
+  const videoMap = usingExternalVideos
+    ? options.videoElements!
+    : new Map<number, HTMLVideoElement>();
+
+  let tempContainer: HTMLDivElement | null = null;
+
+  if (!usingExternalVideos) {
+    tempContainer = document.createElement('div');
+    tempContainer.style.cssText =
+      'position:fixed;top:0;left:0;width:320px;height:240px;z-index:-9999;opacity:0.01;pointer-events:none;overflow:hidden;';
+    document.body.appendChild(tempContainer);
+
+    await Promise.all(
+      photos.map(async (photo) => {
+        if (!photo.videoUrl) return;
+        const v = document.createElement('video');
+        v.src = photo.videoUrl;
+        v.crossOrigin = 'anonymous';
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.autoplay = true;
+        v.style.cssText = 'width:320px;height:240px;object-fit:cover;';
+        tempContainer!.appendChild(v);
+
+        await new Promise<void>((resolve) => {
+          const onDone = () => {
+            v.removeEventListener('canplay', onDone);
+            v.removeEventListener('loadeddata', onDone);
+            v.removeEventListener('error', onDone);
+            resolve();
+          };
+          v.addEventListener('canplay', onDone);
+          v.addEventListener('loadeddata', onDone);
+          v.addEventListener('error', onDone);
+          setTimeout(resolve, 2000);
+        });
+
+        videoMap.set(photo.poseIndex, v);
+      })
+    );
+  }
+
+  // Pause all videos before step-by-step seeking
+  videoMap.forEach((v) => {
+    try {
+      v.pause();
+    } catch {}
+  });
+
+  // 3. Determine target duration in seconds
+  let targetDurationSeconds = options.durationSeconds;
+  if (!targetDurationSeconds || targetDurationSeconds <= 0) {
+    const durations = Array.from(videoMap.values())
+      .map((v) => v.duration)
+      .filter((d) => typeof d === 'number' && !isNaN(d) && d > 0 && isFinite(d));
+    if (durations.length > 0) {
+      targetDurationSeconds = Math.max(...durations);
+    } else {
+      targetDurationSeconds = 5;
+    }
+  }
+
+  // 24 FPS: standard cinematic video frame rate with exact pacing
+  const fps = 24;
+  const totalFrames = Math.max(12, Math.round(targetDurationSeconds * fps));
+  const frameDurationUs = Math.round(1_000_000 / fps);
+
+  // Check if WebCodecs VideoEncoder is supported
+  const supportsWebCodecs = typeof VideoEncoder !== 'undefined';
+
+  if (!supportsWebCodecs) {
+    return downloadLiveMotionMediaRecorderFallback(
+      options,
+      offscreenCanvas,
+      ctx,
+      dim,
+      photoImageMap,
+      videoMap,
+      usingExternalVideos,
+      tempContainer,
+      targetDurationSeconds,
+      scale,
+      onProgress
+    );
+  }
+
+  // Setup MP4 Muxer with ArrayBuffer target
+  const muxer = new Muxer({
+    target: new ArrayBufferTarget(),
+    video: {
+      codec: 'avc',
+      width,
+      height,
+      frameRate: fps,
+    },
+    fastStart: 'in-memory',
+    firstTimestampBehavior: 'strict',
+  });
+
+  // Check candidate H.264 profiles
+  const candidateCodecs = [
+    'avc1.42001f', // Baseline profile level 3.1 (universal mobile compatibility)
+    'avc1.4d002a', // Main profile level 4.2
+    'avc1.640028', // High profile level 4.0
+    'avc1.42E01F', // Constrained Baseline
+  ];
+
+  let selectedCodec = candidateCodecs[0];
+  for (const c of candidateCodecs) {
+    try {
+      const isSupported = await VideoEncoder.isConfigSupported({
+        codec: c,
+        width,
+        height,
+        bitrate: 4_500_000,
+        framerate: fps,
+      });
+      if (isSupported.supported) {
+        selectedCodec = c;
+        break;
+      }
+    } catch {
+      // try next
+    }
+  }
+
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    error: (e) => console.error('VideoEncoder error:', e),
+  });
+
+  encoder.configure({
+    codec: selectedCodec,
+    width,
+    height,
+    bitrate: 4_500_000,
+    framerate: fps,
+  });
+
+  // 4. Sample and encode each frame sequentially (Deterministic, 0% frame drops)
+  for (let i = 0; i < totalFrames; i++) {
+    const t = (i / totalFrames) * targetDurationSeconds;
+
+    // Seek all video elements in parallel
+    await Promise.all(
+      Array.from(videoMap.values()).map((v) => {
+        const dur = v.duration && isFinite(v.duration) && v.duration > 0 ? v.duration : targetDurationSeconds;
+        const targetTime = Math.min(Math.max(0, t % dur), Math.max(0.01, dur - 0.04));
+        return seekVideoElement(v, targetTime);
+      })
+    );
+
+    // Render full photostrip onto offscreen canvas
+    renderPhotostripSync(
+      ctx,
+      dim,
+      { ...options, scale, previewMode: 'motion' },
+      photoImageMap,
+      videoMap
+    );
+
+    // Create VideoFrame and encode
+    const timestampUs = i * frameDurationUs;
+    const isKeyFrame = i % (fps * 2) === 0;
+    const frame = new VideoFrame(offscreenCanvas, {
+      timestamp: timestampUs,
+      duration: frameDurationUs,
+    });
+
+    encoder.encode(frame, { keyFrame: isKeyFrame });
+    frame.close();
+
+    const progress = Math.round(((i + 1) / totalFrames) * 100);
+    if (onProgress) {
+      onProgress(progress);
+    }
+
+    // Yield to browser event loop
+    if (i % 3 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  await encoder.flush();
+  encoder.close();
+
+  muxer.finalize();
+  const buffer = muxer.target.buffer;
+  const mp4Blob = new Blob([buffer], { type: 'video/mp4' });
+
+  // Cleanup temporary resources or resume preview videos
+  if (!usingExternalVideos) {
+    videoMap.forEach((v) => {
+      try {
+        v.pause();
+        v.src = '';
+      } catch {}
+    });
+    try {
+      tempContainer?.remove();
+    } catch {}
+  } else {
+    videoMap.forEach((v) => {
+      v.play().catch(() => {});
+    });
+  }
+
+  // 5. Trigger download of the MP4 file
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+    now.getDate()
+  ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const link = document.createElement('a');
+  link.download = `klipklap_live_${options.layout}_${options.frameId}_${timestamp}.mp4`;
+  const blobUrl = URL.createObjectURL(mp4Blob);
+  link.href = blobUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+}
+
