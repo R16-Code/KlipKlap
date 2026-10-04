@@ -64,9 +64,13 @@ export type AppStep = 'booth' | 'studio';
 
 export type CaptureState = 'idle' | 'countdown' | 'flash' | 'captured' | 'next_pose' | 'completed';
 
+export type StudioPreviewMode = 'photo' | 'motion';
+
 export interface CapturedPhoto {
   id: string;
   dataUrl: string;
+  videoUrl?: string; // Blob URL of the short video clip for this pose
+  isMirrored?: boolean; // Whether camera was mirrored when captured
   poseIndex: number;
   timestamp: number;
 }

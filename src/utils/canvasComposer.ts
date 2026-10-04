@@ -8,6 +8,8 @@ export interface ComposeOptions {
   filter: FilterType;
   settings: StudioSettings;
   scale?: number; // 1 for responsive preview, 2.5 for 300 DPI high-res export
+  previewMode?: 'photo' | 'motion';
+  videoElements?: Map<number, HTMLVideoElement>;
 }
 
 export interface LayoutDimensions {
@@ -263,6 +265,119 @@ function drawCoverImage(
   ctx.stroke();
 
   ctx.restore();
+}
+
+/**
+ * Draws HTMLVideoElement with object-fit: cover center-crop into target rectangle,
+ * with optional horizontal mirroring for selfie/front camera.
+ */
+function drawCoverVideo(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  dx: number,
+  dy: number,
+  dWidth: number,
+  dHeight: number,
+  radius: number,
+  isMirrored = false
+) {
+  const vWidth = video.videoWidth || 1280;
+  const vHeight = video.videoHeight || 960;
+  if (!vWidth || !vHeight) return;
+
+  const videoRatio = vWidth / vHeight;
+  const targetRatio = dWidth / dHeight;
+
+  let sx = 0;
+  let sy = 0;
+  let sWidth = vWidth;
+  let sHeight = vHeight;
+
+  if (videoRatio > targetRatio) {
+    sWidth = vHeight * targetRatio;
+    sx = (vWidth - sWidth) / 2;
+  } else {
+    sHeight = vWidth / targetRatio;
+    sy = (vHeight - sHeight) / 2;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(dx, dy, dWidth, dHeight, radius);
+  } else {
+    ctx.rect(dx, dy, dWidth, dHeight);
+  }
+  ctx.clip();
+
+  if (isMirrored) {
+    ctx.translate(dx + dWidth, dy);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, dWidth, dHeight);
+  } else {
+    ctx.drawImage(video, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+  }
+
+  // Subtle inner border for crisp photo edges
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/**
+ * Applies color grading filter preset to canvas 2D rendering context
+ */
+export function applyFilterToContext(ctx: CanvasRenderingContext2D, filter: FilterType) {
+  switch (filter) {
+    case 'bw':
+      ctx.filter = 'grayscale(100%) contrast(120%) brightness(96%)';
+      break;
+    case 'sepia':
+      ctx.filter = 'sepia(45%) saturate(110%) contrast(98%) brightness(102%)';
+      break;
+    case 'grain':
+      ctx.filter = 'contrast(106%) saturate(92%) brightness(102%)';
+      break;
+    case 'pastel':
+      ctx.filter = 'contrast(96%) saturate(120%) brightness(106%) hue-rotate(-8deg)';
+      break;
+    case 'fuji':
+      ctx.filter = 'contrast(112%) saturate(130%) brightness(98%) hue-rotate(4deg)';
+      break;
+    case 'cyber':
+      ctx.filter = 'contrast(125%) saturate(140%) brightness(95%) hue-rotate(185deg)';
+      break;
+    case 'cinema':
+      ctx.filter = 'contrast(115%) saturate(92%) brightness(96%) sepia(20%) hue-rotate(155deg)';
+      break;
+    case 'soft':
+      ctx.filter = 'contrast(92%) saturate(108%) brightness(106%)';
+      break;
+    case 'kodak':
+      ctx.filter = 'contrast(112%) saturate(135%) brightness(103%) sepia(18%)';
+      break;
+    case 'moody_noir':
+      ctx.filter = 'grayscale(100%) contrast(140%) brightness(92%)';
+      break;
+    case 'haru_blue':
+      ctx.filter = 'contrast(106%) saturate(108%) brightness(105%) hue-rotate(12deg)';
+      break;
+    case 'cherry_blossom':
+      ctx.filter = 'contrast(100%) saturate(118%) brightness(108%) hue-rotate(-14deg)';
+      break;
+    case 'warm_latte':
+      ctx.filter = 'contrast(95%) saturate(88%) brightness(103%) sepia(28%)';
+      break;
+    case 'vintage_90s':
+      ctx.filter = 'contrast(120%) saturate(125%) brightness(100%) sepia(12%) hue-rotate(-5deg)';
+      break;
+    case 'normal':
+    default:
+      ctx.filter = 'contrast(102%) saturate(104%)';
+      break;
+  }
 }
 
 /**
@@ -650,7 +765,7 @@ export async function composePhotostrip(
   canvas: HTMLCanvasElement,
   options: ComposeOptions
 ): Promise<void> {
-  const { photos, layout, frameId, filter, settings, scale = 1 } = options;
+  const { photos, layout, frameId, filter, settings, scale = 1, previewMode = 'photo', videoElements } = options;
   const dim = getLayoutDimensions(layout, scale);
 
   canvas.width = dim.width;
@@ -668,7 +783,7 @@ export async function composePhotostrip(
   // 2. Draw theme decorations (retro film sprockets, cherries, daisies, clouds, etc.)
   drawFrameThemedDecorations(ctx, frame.id, dim, scale);
 
-  // 3. Preload all available photo images mapped by poseIndex
+  // 3. Preload all available photo images mapped by poseIndex (for static mode or video fallback)
   const photoImageMap = new Map<number, HTMLImageElement>();
   await Promise.all(
     photos.map(async (photo) => {
@@ -712,60 +827,31 @@ export async function composePhotostrip(
     const dy = baseMarginTop + row * (dim.photoHeight + effectiveGapY) + scaleOffsetY;
 
     const img = photoImageMap.get(i);
+    const video = videoElements?.get(i);
+    const photoItem = photos.find((p) => p.poseIndex === i);
 
-    if (img) {
+    if (previewMode === 'motion' && video && video.readyState >= 2) {
       ctx.save();
+      applyFilterToContext(ctx, filter);
+      drawCoverVideo(
+        ctx,
+        video,
+        dx,
+        dy,
+        targetPhotoWidth,
+        targetPhotoHeight,
+        dim.photoRadius,
+        photoItem?.isMirrored ?? false
+      );
+      ctx.restore();
 
-      // Apply color grading filter
-      switch (filter) {
-        case 'bw':
-          ctx.filter = 'grayscale(100%) contrast(120%) brightness(96%)';
-          break;
-        case 'sepia':
-          ctx.filter = 'sepia(45%) saturate(110%) contrast(98%) brightness(102%)';
-          break;
-        case 'grain':
-          ctx.filter = 'contrast(106%) saturate(92%) brightness(102%)';
-          break;
-        case 'pastel':
-          ctx.filter = 'contrast(96%) saturate(120%) brightness(106%) hue-rotate(-8deg)';
-          break;
-        case 'fuji':
-          ctx.filter = 'contrast(112%) saturate(130%) brightness(98%) hue-rotate(4deg)';
-          break;
-        case 'cyber':
-          ctx.filter = 'contrast(125%) saturate(140%) brightness(95%) hue-rotate(185deg)';
-          break;
-        case 'cinema':
-          ctx.filter = 'contrast(115%) saturate(92%) brightness(96%) sepia(20%) hue-rotate(155deg)';
-          break;
-        case 'soft':
-          ctx.filter = 'contrast(92%) saturate(108%) brightness(106%)';
-          break;
-        case 'kodak':
-          ctx.filter = 'contrast(112%) saturate(135%) brightness(103%) sepia(18%)';
-          break;
-        case 'moody_noir':
-          ctx.filter = 'grayscale(100%) contrast(140%) brightness(92%)';
-          break;
-        case 'haru_blue':
-          ctx.filter = 'contrast(106%) saturate(108%) brightness(105%) hue-rotate(12deg)';
-          break;
-        case 'cherry_blossom':
-          ctx.filter = 'contrast(100%) saturate(118%) brightness(108%) hue-rotate(-14deg)';
-          break;
-        case 'warm_latte':
-          ctx.filter = 'contrast(95%) saturate(88%) brightness(103%) sepia(28%)';
-          break;
-        case 'vintage_90s':
-          ctx.filter = 'contrast(120%) saturate(125%) brightness(100%) sepia(12%) hue-rotate(-5deg)';
-          break;
-        case 'normal':
-        default:
-          ctx.filter = 'contrast(102%) saturate(104%)';
-          break;
+      // Film grain overlay
+      if (filter === 'grain' || filter === 'vintage_90s' || filter === 'kodak') {
+        drawFilmGrain(ctx, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
       }
-
+    } else if (img) {
+      ctx.save();
+      applyFilterToContext(ctx, filter);
       drawCoverImage(ctx, img, dx, dy, targetPhotoWidth, targetPhotoHeight, dim.photoRadius);
       ctx.restore();
 
@@ -881,4 +967,164 @@ export async function downloadHighResPhotostrip(
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/**
+ * Records the animated Live Motion photostrip into an MP4 video file and triggers download
+ */
+export async function downloadLiveMotionVideo(
+  options: ComposeOptions,
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  const { photos } = options;
+
+  if (typeof MediaRecorder === 'undefined') {
+    throw new Error('MediaRecorder tidak didukung di browser ini.');
+  }
+
+  // Scale 2 is crisp (e.g. 960px or 1520px wide) and performs smoothly
+  const scale = 2;
+  const dim = getLayoutDimensions(options.layout, scale);
+
+  const offscreenCanvas = document.createElement('canvas');
+  // Enforce even dimensions for video codec compatibility
+  offscreenCanvas.width = dim.width - (dim.width % 2);
+  offscreenCanvas.height = dim.height - (dim.height % 2);
+
+  // 1. Prepare video elements for each photo with a videoUrl
+  const videoMap = new Map<number, HTMLVideoElement>();
+  await Promise.all(
+    photos.map(async (photo) => {
+      if (!photo.videoUrl) return;
+      const v = document.createElement('video');
+      v.src = photo.videoUrl;
+      v.crossOrigin = 'anonymous';
+      v.muted = true;
+      v.loop = true;
+      v.playsInline = true;
+      v.autoplay = true;
+
+      await new Promise<void>((resolve) => {
+        v.onloadeddata = () => resolve();
+        v.onerror = () => resolve();
+        setTimeout(resolve, 2000); // 2s timeout safeguard
+      });
+
+      v.currentTime = 0;
+      await v.play().catch(() => {});
+      videoMap.set(photo.poseIndex, v);
+    })
+  );
+
+  // 2. Prepare canvas stream and media recorder
+  const stream = offscreenCanvas.captureStream(30);
+
+  const types = [
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ];
+  let mimeType = '';
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) {
+      mimeType = t;
+      break;
+    }
+  }
+
+  const chunks: Blob[] = [];
+  const recorderOptions: MediaRecorderOptions = {
+    videoBitsPerSecond: 6_000_000,
+  };
+  if (mimeType) {
+    recorderOptions.mimeType = mimeType;
+  }
+
+  const recorder = new MediaRecorder(stream, recorderOptions);
+
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) {
+      chunks.push(e.data);
+    }
+  };
+
+  // 3. Render loop for 3.5 seconds
+  const durationMs = 3500;
+  const fps = 30;
+  const totalFrames = Math.round((durationMs / 1000) * fps);
+
+  recorder.start();
+
+  let isRecording = true;
+  let frameCount = 0;
+  const startTime = Date.now();
+
+  await new Promise<void>((resolve) => {
+    const renderLoop = async () => {
+      if (!isRecording) return;
+
+      await composePhotostrip(offscreenCanvas, {
+        ...options,
+        scale,
+        previewMode: 'motion',
+        videoElements: videoMap,
+      });
+
+      frameCount++;
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, Math.round((elapsed / durationMs) * 100));
+      if (onProgress) onProgress(progress);
+
+      if (elapsed >= durationMs || frameCount >= totalFrames) {
+        isRecording = false;
+        resolve();
+      } else {
+        requestAnimationFrame(renderLoop);
+      }
+    };
+
+    renderLoop();
+  });
+
+  // 4. Stop recorder and wait for final blob
+  const videoBlob = await new Promise<Blob>((resolve) => {
+    recorder.onstop = () => {
+      const finalMime = recorder.mimeType || mimeType || 'video/mp4';
+      resolve(new Blob(chunks, { type: finalMime }));
+    };
+    try {
+      recorder.stop();
+    } catch {
+      resolve(new Blob(chunks, { type: mimeType || 'video/mp4' }));
+    }
+  });
+
+  // Pause and cleanup temporary video elements
+  videoMap.forEach((v) => {
+    try {
+      v.pause();
+      v.src = '';
+    } catch {
+      // ignore
+    }
+  });
+
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+    now.getDate()
+  ).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(
+    2,
+    '0'
+  )}${String(now.getSeconds()).padStart(2, '0')}`;
+
+  const link = document.createElement('a');
+  link.download = `klipklap_live_${options.layout}_${options.frameId}_${timestamp}.mp4`;
+  const blobUrl = URL.createObjectURL(videoBlob);
+  link.href = blobUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }

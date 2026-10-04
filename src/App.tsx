@@ -57,6 +57,9 @@ export const App: React.FC = () => {
                 <div className="shrink-0">
                   <ShutterControls
                     onCaptureFrame={() => webcam.captureFrame(isMirrored, 4 / 3)}
+                    startVideoRecording={webcam.startVideoRecording}
+                    stopVideoRecording={webcam.stopVideoRecording}
+                    isMirrored={isMirrored && webcam.facingMode === 'user'}
                   />
                 </div>
               </section>
@@ -93,6 +96,9 @@ export const App: React.FC = () => {
               <div className="shrink-0">
                 <MobileBoothDock
                   onCaptureFrame={() => webcam.captureFrame(isMirrored, 4 / 3)}
+                  startVideoRecording={webcam.startVideoRecording}
+                  stopVideoRecording={webcam.stopVideoRecording}
+                  isMirrored={isMirrored && webcam.facingMode === 'user'}
                 />
               </div>
             </div>

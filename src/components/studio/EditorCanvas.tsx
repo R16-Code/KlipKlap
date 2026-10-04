@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check } from 'lucide-react';
+import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check, Sparkles } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { composePhotostrip } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
@@ -10,6 +10,8 @@ interface EditorCanvasProps {
 
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoElementsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
+
   const {
     capturedPhotos,
     layout,
@@ -19,6 +21,8 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     studioSettings,
     setCurrentStep,
     swapPhotos,
+    previewMode,
+    setPreviewMode,
   } = useBoothStore();
 
   const [selectedSwapIndex, setSelectedSwapIndex] = useState<number | null>(null);
@@ -29,6 +33,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
   const missingCount = requiredCount - capturedPhotos.length;
   const isIncomplete = missingCount > 0;
   const fittingLayout = getFittingLayout(capturedPhotos.length);
+  const hasLiveMotion = capturedPhotos.some((p) => Boolean(p.videoUrl));
 
   const handleSlotClick = (index: number) => {
     if (selectedSwapIndex === null) {
@@ -41,35 +46,100 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     }
   };
 
-  // Re-compose photostrip onto canvas whenever settings or photos update
+  // Manage video elements for Live Motion mode
+  useEffect(() => {
+    const currentMap = videoElementsRef.current;
+
+    if (previewMode !== 'motion') {
+      currentMap.forEach((v) => {
+        try {
+          v.pause();
+        } catch {
+          // ignore
+        }
+      });
+      return;
+    }
+
+    capturedPhotos.forEach((photo) => {
+      if (!photo.videoUrl) return;
+
+      let v = currentMap.get(photo.poseIndex);
+      if (!v || v.src !== photo.videoUrl) {
+        v = document.createElement('video');
+        v.src = photo.videoUrl;
+        v.crossOrigin = 'anonymous';
+        v.muted = true;
+        v.loop = true;
+        v.playsInline = true;
+        v.autoplay = true;
+        currentMap.set(photo.poseIndex, v);
+      }
+      v.play().catch(() => {});
+    });
+
+    return () => {
+      currentMap.forEach((v) => {
+        try {
+          v.pause();
+        } catch {
+          // ignore
+        }
+      });
+    };
+  }, [capturedPhotos, previewMode]);
+
+  // Re-compose photostrip onto canvas (single frame for photo, animation loop for live motion)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     let isMounted = true;
+    let animationFrameId: number;
 
-    const render = async () => {
-      // High-DPI scale (2x or 3x devicePixelRatio) ensures ultra-crisp display across Retina iPhones, iPads, and desktop displays
-      const dpr = typeof window !== 'undefined' ? Math.max(window.devicePixelRatio || 1, 2) : 2;
-      const previewScale = Math.min(dpr, 2.5);
+    const dpr = typeof window !== 'undefined' ? Math.max(window.devicePixelRatio || 1, 2) : 2;
+    const previewScale = Math.min(dpr, 2.5);
 
-      await composePhotostrip(canvas, {
+    if (previewMode === 'motion') {
+      const loop = async () => {
+        if (!isMounted) return;
+
+        await composePhotostrip(canvas, {
+          photos: capturedPhotos,
+          layout,
+          frameId: selectedFrame,
+          filter: selectedFilter,
+          settings: studioSettings,
+          scale: previewScale,
+          previewMode: 'motion',
+          videoElements: videoElementsRef.current,
+        });
+
+        if (isMounted) {
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      };
+
+      animationFrameId = requestAnimationFrame(loop);
+    } else {
+      composePhotostrip(canvas, {
         photos: capturedPhotos,
         layout,
         frameId: selectedFrame,
         filter: selectedFilter,
         settings: studioSettings,
         scale: previewScale,
+        previewMode: 'photo',
       });
-      if (!isMounted) return;
-    };
-
-    render();
+    }
 
     return () => {
       isMounted = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
-  }, [capturedPhotos, layout, selectedFrame, selectedFilter, studioSettings]);
+  }, [capturedPhotos, layout, selectedFrame, selectedFilter, studioSettings, previewMode]);
 
   return (
     <div className="w-full min-h-full flex flex-col items-center justify-center p-1 sm:p-3 select-none relative overflow-y-auto lg:overflow-hidden no-scrollbar">
@@ -125,6 +195,40 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
           </div>
         </div>
       )}
+
+      {/* Top Preview Mode Switcher (Photo vs Live Motion) */}
+      <div className="z-20 flex items-center justify-center gap-2 mb-1.5 sm:mb-2 shrink-0">
+        <div className="flex items-center gap-1 bg-white/90 backdrop-blur-md p-1 rounded-2xl border border-black/[0.08] shadow-soft-sm">
+          <button
+            type="button"
+            onClick={() => setPreviewMode('photo')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+              previewMode === 'photo'
+                ? 'bg-studio-charcoal text-white shadow-soft-sm'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>Foto Klasik</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPreviewMode('motion')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+              previewMode === 'motion'
+                ? 'bg-studio-charcoal text-white shadow-soft-sm ring-1 ring-amber-400/40'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+            }`}
+          >
+            <Sparkles className={`w-3.5 h-3.5 ${previewMode === 'motion' ? 'text-amber-300 animate-spin' : 'text-amber-500'}`} />
+            <span>Live Motion</span>
+            {hasLiveMotion && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* Interactive Photo Reorder Bar (Positioned cleanly ABOVE the photostrip frame) */}
       {capturedPhotos.length > 1 && (

@@ -1,5 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+function getBestVideoMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const types = [
+    'video/mp4;codecs=avc1',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) {
+      return t;
+    }
+  }
+  return '';
+}
+
 interface UseWebcamReturn {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   stream: MediaStream | null;
@@ -10,6 +27,8 @@ interface UseWebcamReturn {
   stopCamera: () => void;
   syncVideoRef: (video: HTMLVideoElement | null) => void;
   captureFrame: (isMirrored: boolean, targetRatio?: number) => string | null;
+  startVideoRecording: () => void;
+  stopVideoRecording: () => Promise<string | null>;
   isSimulated: boolean;
   toggleSimulationMode: () => void;
   facingMode: 'user' | 'environment';
@@ -397,6 +416,83 @@ export function useWebcam(): UseWebcamReturn {
     []
   );
 
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
+  /**
+   * Starts recording the video stream for the upcoming pose.
+   * Works seamlessly with both real webcam stream and simulated canvas stream.
+   */
+  const startVideoRecording = useCallback(() => {
+    const activeStream = streamRef.current;
+    if (!activeStream || !activeStream.active) return;
+
+    try {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+
+      recordedChunksRef.current = [];
+      const mimeType = getBestVideoMimeType();
+      const options: MediaRecorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(activeStream, options);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.start(100);
+      mediaRecorderRef.current = recorder;
+    } catch (err) {
+      console.warn('Could not start MediaRecorder for pose:', err);
+    }
+  }, []);
+
+  /**
+   * Stops recording the video stream for the pose and returns a Blob URL.
+   */
+  const stopVideoRecording = useCallback((): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        resolve(null);
+        return;
+      }
+
+      recorder.onstop = () => {
+        try {
+          const mimeType = recorder.mimeType || 'video/mp4';
+          const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+          if (blob.size > 0) {
+            const url = URL.createObjectURL(blob);
+            resolve(url);
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          console.warn('Error creating video blob URL:', e);
+          resolve(null);
+        } finally {
+          mediaRecorderRef.current = null;
+          recordedChunksRef.current = [];
+        }
+      };
+
+      try {
+        recorder.stop();
+      } catch (err) {
+        console.warn('Error stopping MediaRecorder:', err);
+        resolve(null);
+      }
+    });
+  }, []);
+
   return {
     videoRef,
     stream,
@@ -407,6 +503,8 @@ export function useWebcam(): UseWebcamReturn {
     stopCamera,
     syncVideoRef,
     captureFrame,
+    startVideoRecording,
+    stopVideoRecording,
     isSimulated,
     toggleSimulationMode,
     facingMode,

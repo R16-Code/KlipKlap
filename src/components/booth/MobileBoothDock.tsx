@@ -7,9 +7,17 @@ import type { LayoutType } from '../../types';
 
 interface MobileBoothDockProps {
   onCaptureFrame: () => string | null;
+  startVideoRecording?: () => void;
+  stopVideoRecording?: () => Promise<string | null>;
+  isMirrored?: boolean;
 }
 
-export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame }) => {
+export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({
+  onCaptureFrame,
+  startVideoRecording,
+  stopVideoRecording,
+  isMirrored = false,
+}) => {
   const {
     layout,
     setLayout,
@@ -61,8 +69,17 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame
       setCurrentPoseIndex(pose);
 
       setCaptureState('countdown');
+      let isRecordingStarted = false;
+
       for (let sec = timerDuration; sec > 0; sec--) {
         setCountdownValue(sec);
+        // Start recording live motion clip (captures up to last 4s of posing)
+        if (!isRecordingStarted && (sec <= 4 || timerDuration <= 4)) {
+          if (startVideoRecording) {
+            startVideoRecording();
+          }
+          isRecordingStarted = true;
+        }
         studioAudio.playCountdownTick(false);
         await sleep(1000);
       }
@@ -72,10 +89,14 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame
       setCaptureState('flash');
 
       const photoDataUrl = onCaptureFrame();
+      const videoBlobUrl = stopVideoRecording ? await stopVideoRecording() : null;
+
       if (photoDataUrl) {
         addPhoto({
           id: `photo_${Date.now()}_${pose}`,
           dataUrl: photoDataUrl,
+          videoUrl: videoBlobUrl || undefined,
+          isMirrored,
           poseIndex: pose,
           timestamp: Date.now(),
         });
@@ -106,6 +127,9 @@ export const MobileBoothDock: React.FC<MobileBoothDockProps> = ({ onCaptureFrame
     timerDuration,
     setCountdownValue,
     onCaptureFrame,
+    startVideoRecording,
+    stopVideoRecording,
+    isMirrored,
     addPhoto,
     setCurrentStep,
   ]);

@@ -7,12 +7,17 @@ import type {
   CapturedPhoto,
   StudioSettings,
   SlotCalibration,
+  StudioPreviewMode,
 } from '../types';
 
 interface BoothState {
   // Navigation
   currentStep: AppStep;
   setCurrentStep: (step: AppStep) => void;
+
+  // Studio Preview Mode ('photo' = static photo strip, 'motion' = live moving photostrip)
+  previewMode: StudioPreviewMode;
+  setPreviewMode: (mode: StudioPreviewMode) => void;
 
   // Layout selection
   layout: LayoutType;
@@ -72,6 +77,9 @@ const DEFAULT_SETTINGS: StudioSettings = {
 export const useBoothStore = create<BoothState>((set, get) => ({
   currentStep: 'booth',
   setCurrentStep: (step) => set({ currentStep: step }),
+
+  previewMode: 'photo',
+  setPreviewMode: (mode) => set({ previewMode: mode }),
 
   layout: 'strip_1x4',
   setLayout: (layout) => {
@@ -182,11 +190,32 @@ export const useBoothStore = create<BoothState>((set, get) => ({
     });
   },
 
-  clearPhotos: () => set({ capturedPhotos: [], currentPoseIndex: 0, captureState: 'idle' }),
+  clearPhotos: () => {
+    get().capturedPhotos.forEach((p) => {
+      if (p.videoUrl) {
+        try {
+          URL.revokeObjectURL(p.videoUrl);
+        } catch {
+          // ignore
+        }
+      }
+    });
+    set({ capturedPhotos: [], currentPoseIndex: 0, captureState: 'idle' });
+  },
 
   resetSession: () => {
+    get().capturedPhotos.forEach((p) => {
+      if (p.videoUrl) {
+        try {
+          URL.revokeObjectURL(p.videoUrl);
+        } catch {
+          // ignore
+        }
+      }
+    });
     set({
       currentStep: 'booth',
+      previewMode: 'photo',
       captureState: 'idle',
       countdownValue: get().timerDuration,
       currentPoseIndex: 0,

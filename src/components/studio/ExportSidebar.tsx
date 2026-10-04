@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { Download, Sparkles, Check, Calendar, Type, ArrowLeft, ShieldCheck, Trash2, AlertTriangle, Video } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
-import { downloadHighResPhotostrip } from '../../utils/canvasComposer';
+import { downloadHighResPhotostrip, downloadLiveMotionVideo } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS } from '../../utils/constants';
 import confetti from 'canvas-confetti';
 
@@ -15,17 +15,21 @@ export const ExportSidebar: React.FC = () => {
     updateStudioSettings,
     setCurrentStep,
     resetSession,
+    setPreviewMode,
   } = useBoothStore();
 
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingVideo, setIsExportingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [videoSuccess, setVideoSuccess] = useState(false);
 
   const layoutConfig = LAYOUT_CONFIGS[layout];
   const requiredPhotos = layoutConfig.photoCount;
   const isIncomplete = capturedPhotos.length < requiredPhotos;
 
   const handleDownload = async () => {
-    if (isExporting || capturedPhotos.length === 0) return;
+    if (isExporting || isExportingVideo || capturedPhotos.length === 0) return;
 
     if (isIncomplete) {
       const proceed = window.confirm(
@@ -63,6 +67,51 @@ export const ExportSidebar: React.FC = () => {
       console.error('Failed to export photostrip:', err);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleDownloadMotion = async () => {
+    if (isExporting || isExportingVideo || capturedPhotos.length === 0) return;
+
+    if (isIncomplete) {
+      const proceed = window.confirm(
+        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor video Live Motion sekarang?`
+      );
+      if (!proceed) return;
+    }
+
+    try {
+      setIsExportingVideo(true);
+      setVideoProgress(0);
+      setPreviewMode('motion');
+
+      await downloadLiveMotionVideo(
+        {
+          photos: capturedPhotos,
+          layout,
+          frameId: selectedFrame,
+          filter: selectedFilter,
+          settings: studioSettings,
+        },
+        (progress) => setVideoProgress(progress)
+      );
+
+      setVideoSuccess(true);
+      confetti({
+        particleCount: 100,
+        spread: 90,
+        origin: { y: 0.7 },
+        colors: ['#F59E0B', '#E65D47', '#3B82F6', '#10B981'],
+      });
+
+      setTimeout(() => {
+        setVideoSuccess(false);
+      }, 4000);
+    } catch (err) {
+      console.error('Failed to export Live Motion video:', err);
+      alert('Gagal mengekspor video Live Motion. Pastikan browser mendukung MediaRecorder.');
+    } finally {
+      setIsExportingVideo(false);
     }
   };
 
@@ -194,31 +243,61 @@ export const ExportSidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Download Button */}
+        {/* Action Button 1: Download Photo (PNG) */}
         <button
           type="button"
-          disabled={isExporting}
+          disabled={isExporting || isExportingVideo}
           onClick={handleDownload}
-          className={`w-full py-3.5 px-4 rounded-2xl text-xs font-semibold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md ${
+          className={`w-full py-3 px-4 rounded-2xl text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] ${
             downloadSuccess
               ? 'bg-emerald-600 text-white'
-              : 'bg-studio-charcoal text-white hover:bg-black active:scale-[0.98]'
+              : 'bg-studio-charcoal text-white hover:bg-black'
           }`}
         >
           {isExporting ? (
             <>
               <Sparkles className="w-4 h-4 animate-spin text-amber-300" />
-              <span>Generating Print File...</span>
+              <span>Generating PNG (300 DPI)...</span>
             </>
           ) : downloadSuccess ? (
             <>
-              <Check className="w-4 h-4" />
-              <span>Downloaded to Laptop!</span>
+              <Check className="w-4 h-4 text-emerald-300" />
+              <span>Foto PNG Tersimpan!</span>
             </>
           ) : (
             <>
               <Download className="w-4 h-4" />
-              <span>Download High-Res</span>
+              <span>Download Foto (PNG)</span>
+            </>
+          )}
+        </button>
+
+        {/* Action Button 2: Download Live Motion (MP4) */}
+        <button
+          type="button"
+          disabled={isExporting || isExportingVideo}
+          onClick={handleDownloadMotion}
+          className={`w-full py-3 px-4 rounded-2xl text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] border ${
+            videoSuccess
+              ? 'bg-emerald-600 text-white border-emerald-600'
+              : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border-amber-400/50'
+          }`}
+          title="Download photostrip bergerak berformat video MP4"
+        >
+          {isExportingVideo ? (
+            <>
+              <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
+              <span>Merekam Video MP4 ({videoProgress}%)...</span>
+            </>
+          ) : videoSuccess ? (
+            <>
+              <Check className="w-4 h-4 text-white" />
+              <span>Video MP4 Tersimpan!</span>
+            </>
+          ) : (
+            <>
+              <Video className="w-4 h-4 text-amber-600" />
+              <span>Download Live Motion (MP4)</span>
             </>
           )}
         </button>

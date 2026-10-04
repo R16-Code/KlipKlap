@@ -13,10 +13,11 @@ import {
   Trash2,
   AlertTriangle,
   Heart,
+  Video,
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS } from '../../utils/constants';
-import { downloadHighResPhotostrip } from '../../utils/canvasComposer';
+import { downloadHighResPhotostrip, downloadLiveMotionVideo } from '../../utils/canvasComposer';
 import { EditorCanvas } from './EditorCanvas';
 import { SlotCalibrator } from './SlotCalibrator';
 import confetti from 'canvas-confetti';
@@ -35,12 +36,16 @@ export const MobileStudioEditor: React.FC = () => {
     updateStudioSettings,
     setCurrentStep,
     resetSession,
+    setPreviewMode,
   } = useBoothStore();
 
   const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'filters' | 'caption' | null>(null);
   const [frameCategory, setFrameCategory] = useState<FrameCategory | 'all'>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingVideo, setIsExportingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [videoSuccess, setVideoSuccess] = useState(false);
 
   const layoutKeys: LayoutType[] = [
     'strip_1x4',
@@ -106,6 +111,49 @@ export const MobileStudioEditor: React.FC = () => {
       console.error('Failed to export:', err);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleDownloadMotion = async () => {
+    if (isExporting || isExportingVideo || capturedPhotos.length === 0) return;
+
+    if (isIncomplete) {
+      const proceed = window.confirm(
+        `Foto belum lengkap: Baru ada ${capturedPhotos.length} dari ${requiredPhotos} slot foto.\n\nTetap ekspor video Live Motion sekarang?`
+      );
+      if (!proceed) return;
+    }
+
+    try {
+      setIsExportingVideo(true);
+      setVideoProgress(0);
+      setPreviewMode('motion');
+
+      await downloadLiveMotionVideo(
+        {
+          photos: capturedPhotos,
+          layout,
+          frameId: selectedFrame,
+          filter: selectedFilter,
+          settings: studioSettings,
+        },
+        (progress) => setVideoProgress(progress)
+      );
+
+      setVideoSuccess(true);
+      confetti({
+        particleCount: 90,
+        spread: 80,
+        origin: { y: 0.8 },
+        colors: ['#F59E0B', '#E65D47', '#3B82F6', '#10B981'],
+      });
+
+      setTimeout(() => setVideoSuccess(false), 3500);
+    } catch (err) {
+      console.error('Failed to export Live Motion video:', err);
+      alert('Gagal mengekspor video Live Motion. Pastikan browser mendukung MediaRecorder.');
+    } finally {
+      setIsExportingVideo(false);
     }
   };
 
@@ -461,33 +509,66 @@ export const MobileStudioEditor: React.FC = () => {
             </div>
           )}
 
-          <button
-            type="button"
-            disabled={isExporting}
-            onClick={handleDownload}
-            className={`w-full py-3 min-h-[48px] rounded-2xl text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] ${
-              downloadSuccess
-                ? 'bg-emerald-600 text-white'
-                : 'bg-studio-charcoal text-white hover:bg-black'
-            }`}
-          >
-            {isExporting ? (
-              <>
-                <Sparkles className="w-4 h-4 animate-spin text-amber-300" />
-                <span>Processing 300 DPI File...</span>
-              </>
-            ) : downloadSuccess ? (
-              <>
-                <Check className="w-4 h-4" />
-                <span>Downloaded Successfully!</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Download High-Res (300 DPI)</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Button 1: Download Foto (PNG) */}
+            <button
+              type="button"
+              disabled={isExporting || isExportingVideo}
+              onClick={handleDownload}
+              className={`flex-1 py-3 min-h-[46px] px-2 rounded-2xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] ${
+                downloadSuccess
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-studio-charcoal text-white hover:bg-black'
+              }`}
+            >
+              {isExporting ? (
+                <>
+                  <Sparkles className="w-4 h-4 animate-spin text-amber-300" />
+                  <span className="text-[11px]">PNG...</span>
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-300" />
+                  <span className="text-[11px]">Tersimpan!</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span className="text-[11px]">Foto (PNG)</span>
+                </>
+              )}
+            </button>
+
+            {/* Button 2: Download Live Motion (MP4) */}
+            <button
+              type="button"
+              disabled={isExporting || isExportingVideo}
+              onClick={handleDownloadMotion}
+              className={`flex-1 py-3 min-h-[46px] px-2 rounded-2xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] border ${
+                videoSuccess
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-950 border-amber-300/80'
+              }`}
+              title="Download video Live Motion MP4"
+            >
+              {isExportingVideo ? (
+                <>
+                  <Sparkles className="w-4 h-4 animate-spin text-amber-600" />
+                  <span className="text-[11px]">MP4 ({videoProgress}%)...</span>
+                </>
+              ) : videoSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-white" />
+                  <span className="text-[11px]">Tersimpan!</span>
+                </>
+              ) : (
+                <>
+                  <Video className="w-4 h-4 text-amber-600" />
+                  <span className="text-[11px]">Live Motion</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

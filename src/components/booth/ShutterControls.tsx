@@ -6,9 +6,17 @@ import { studioAudio } from '../../utils/audio';
 
 interface ShutterControlsProps {
   onCaptureFrame: () => string | null;
+  startVideoRecording?: () => void;
+  stopVideoRecording?: () => Promise<string | null>;
+  isMirrored?: boolean;
 }
 
-export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame }) => {
+export const ShutterControls: React.FC<ShutterControlsProps> = ({
+  onCaptureFrame,
+  startVideoRecording,
+  stopVideoRecording,
+  isMirrored = false,
+}) => {
   const {
     layout,
     setLayout,
@@ -63,8 +71,17 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
 
       // 1. Countdown phase
       setCaptureState('countdown');
+      let isRecordingStarted = false;
+
       for (let sec = timerDuration; sec > 0; sec--) {
         setCountdownValue(sec);
+        // Start recording live motion clip (captures up to last 4s of posing)
+        if (!isRecordingStarted && (sec <= 4 || timerDuration <= 4)) {
+          if (startVideoRecording) {
+            startVideoRecording();
+          }
+          isRecordingStarted = true;
+        }
         studioAudio.playCountdownTick(false);
         await sleep(1000);
       }
@@ -74,12 +91,16 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
       studioAudio.playShutterSound();
       setCaptureState('flash');
 
-      // Grab frame immediately on shutter
+      // Grab frame and video clip immediately on shutter
       const photoDataUrl = onCaptureFrame();
+      const videoBlobUrl = stopVideoRecording ? await stopVideoRecording() : null;
+
       if (photoDataUrl) {
         addPhoto({
           id: `photo_${Date.now()}_${pose}`,
           dataUrl: photoDataUrl,
+          videoUrl: videoBlobUrl || undefined,
+          isMirrored,
           poseIndex: pose,
           timestamp: Date.now(),
         });
@@ -113,6 +134,9 @@ export const ShutterControls: React.FC<ShutterControlsProps> = ({ onCaptureFrame
     timerDuration,
     setCountdownValue,
     onCaptureFrame,
+    startVideoRecording,
+    stopVideoRecording,
+    isMirrored,
     addPhoto,
     setCurrentStep,
   ]);
