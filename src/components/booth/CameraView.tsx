@@ -63,85 +63,100 @@ export const CameraView: React.FC<CameraViewProps> = ({
       {/* Subtle Studio Vignette Overlay */}
       <div className="absolute inset-0 pointer-events-none bg-radial-gradient from-transparent via-transparent to-black/30" />
 
-      {/* Top Controls Bar */}
-      <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 flex items-center justify-between pointer-events-auto z-20">
-        {/* Live Studio Status Pill */}
-        <div className="flex items-center gap-2 bg-stone-900/70 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 text-white shadow-soft-sm">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide uppercase">
-            {isSimulated ? 'Simulated' : 'Live Camera'}
-          </span>
-          <span className="text-[9px] sm:text-[10px] text-stone-300 font-mono hidden xs:inline">1080p</span>
+      {/* Top Controls Bar - hidden during countdown for a clean, unobstructed view */}
+      {captureState !== 'countdown' && (
+        <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 flex items-center justify-between pointer-events-auto z-20">
+          {/* Live Studio Status Pill */}
+          <div className="flex items-center gap-2 bg-stone-900/70 backdrop-blur-md px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 text-white shadow-soft-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span className="text-[10px] sm:text-[11px] font-semibold tracking-wide uppercase">
+              {isSimulated ? 'Simulated' : 'Live Camera'}
+            </span>
+            <span className="text-[9px] sm:text-[10px] text-stone-300 font-mono hidden xs:inline">1080p</span>
+          </div>
+
+          {/* Action Buttons: Flip Camera, Mirror & Demo Mode */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {error && (
+              <button
+                type="button"
+                onClick={toggleSimulationMode}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-full bg-amber-500/90 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-soft-sm backdrop-blur-md active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden sm:inline">Use Demo</span>
+              </button>
+            )}
+
+            {/* Flip Camera Button (Front / Rear toggle for mobile & touch devices) */}
+            {(hasMultipleCameras || toggleFacingMode) && (
+              <button
+                type="button"
+                onClick={toggleFacingMode}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md bg-stone-900/70 text-white/90 border border-white/15 hover:bg-stone-900/90 active:scale-95 shadow-soft-sm"
+                title="Beralih kamera depan/belakang"
+                aria-label="Switch front or back camera"
+              >
+                <SwitchCamera className="w-4 h-4 text-white" />
+                <span className="text-[11px] font-medium hidden md:inline">
+                  {facingMode === 'environment' ? 'Rear' : 'Front'}
+                </span>
+              </button>
+            )}
+
+            {/* Mirror Toggle (Available only for front/selfie camera) */}
+            {facingMode !== 'environment' && (
+              <button
+                type="button"
+                onClick={toggleMirror}
+                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md border active:scale-95 ${
+                  effectiveMirror
+                    ? 'bg-white/95 text-studio-graphite border-white shadow-soft-sm'
+                    : 'bg-stone-900/70 text-white/90 border-white/15 hover:bg-stone-900/90'
+                }`}
+                title="Mirror camera horizontal flip"
+                aria-label="Toggle mirror mode"
+              >
+                <FlipHorizontal className="w-4 h-4" />
+                <span className="hidden md:inline">Mirror: {effectiveMirror ? 'ON' : 'OFF'}</span>
+              </button>
+            )}
+          </div>
         </div>
+      )}
 
-        {/* Action Buttons: Flip Camera, Mirror & Demo Mode */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {error && (
-            <button
-              type="button"
-              onClick={toggleSimulationMode}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] rounded-full bg-amber-500/90 text-white text-xs font-semibold hover:bg-amber-600 transition-colors shadow-soft-sm backdrop-blur-md active:scale-95"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span className="hidden sm:inline">Use Demo</span>
-            </button>
-          )}
-
-          {/* Flip Camera Button (Front / Rear toggle for mobile & touch devices) */}
-          {(hasMultipleCameras || toggleFacingMode) && (
-            <button
-              type="button"
-              onClick={toggleFacingMode}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md bg-stone-900/70 text-white/90 border border-white/15 hover:bg-stone-900/90 active:scale-95 shadow-soft-sm"
-              title="Beralih kamera depan/belakang"
-              aria-label="Switch front or back camera"
-            >
-              <SwitchCamera className="w-4 h-4 text-white" />
-              <span className="text-[11px] font-medium hidden md:inline">
-                {facingMode === 'environment' ? 'Rear' : 'Front'}
-              </span>
-            </button>
-          )}
-
-          {/* Mirror Toggle (Available only for front/selfie camera) */}
-          {facingMode !== 'environment' && (
-            <button
-              type="button"
-              onClick={toggleMirror}
-              className={`flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[44px] min-w-[44px] rounded-full text-xs font-semibold transition-all backdrop-blur-md border active:scale-95 ${
-                effectiveMirror
-                  ? 'bg-white/95 text-studio-graphite border-white shadow-soft-sm'
-                  : 'bg-stone-900/70 text-white/90 border-white/15 hover:bg-stone-900/90'
-              }`}
-              title="Mirror camera horizontal flip"
-              aria-label="Toggle mirror mode"
-            >
-              <FlipHorizontal className="w-4 h-4" />
-              <span className="hidden md:inline">Mirror: {effectiveMirror ? 'ON' : 'OFF'}</span>
-            </button>
-          )}
-        </div>
-      </div>
+      {/* Studio Tally Recording Ring Effect around camera frame */}
+      {captureState === 'countdown' && (
+        <div className="absolute inset-0 z-20 pointer-events-none rounded-2xl sm:rounded-3xl ring-4 ring-amber-400/70 ring-inset" />
+      )}
 
       {/* Shutter Flash Animation Effect */}
       {captureState === 'flash' && (
         <div className="absolute inset-0 z-40 bg-white animate-studio-flash pointer-events-none" />
       )}
 
-      {/* Countdown Badge Overlay */}
+      {/* Countdown Badge Overlay - Positioned at top-center to NEVER cover user's face */}
       {captureState === 'countdown' && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center pointer-events-none bg-black/20 backdrop-blur-[2px]">
-          <div className="flex flex-col items-center animate-popIn">
-            <div className="w-28 h-28 rounded-full bg-white/95 text-studio-graphite flex items-center justify-center shadow-photo border-4 border-white/60">
-              <span className="text-6xl font-bold font-sans tracking-tighter">
-                {countdownValue}
-              </span>
+        <div className="absolute top-3.5 sm:top-5 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center gap-2.5 sm:gap-3 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-stone-900/90 backdrop-blur-md border border-white/20 text-white shadow-2xl ring-2 ring-amber-400/40">
+            {/* Animated Countdown Digit */}
+            <div
+              key={countdownValue}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-amber-500 text-stone-950 font-black text-lg sm:text-xl flex items-center justify-center shadow-md animate-popIn shrink-0"
+            >
+              {countdownValue}
             </div>
-            <div className="mt-4 px-4 py-1.5 rounded-full bg-stone-900/75 backdrop-blur-md text-white text-xs font-medium tracking-widest uppercase">
-              Pose {currentPoseIndex + 1} • Smile! 찰칵!
+            {/* Pose & Smile Text */}
+            <div className="flex flex-col text-left pr-1">
+              <span className="text-[10.5px] sm:text-[11.5px] font-bold text-amber-300 uppercase tracking-wider leading-none">
+                Pose {currentPoseIndex + 1}
+              </span>
+              <span className="text-[9.5px] sm:text-[10.5px] text-white/95 font-medium leading-tight mt-0.5 whitespace-nowrap">
+                Smile! 찰칵! 📸
+              </span>
             </div>
           </div>
         </div>
