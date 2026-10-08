@@ -1,6 +1,8 @@
+![KlipKlap - Your Interactive Digital Photo Booth & Studio](public/header.jpg)
+
 # KlipKlap
 
-A browser-based photo booth application that replicates the Korean photo booth (photobooth) experience. Users capture a sequence of photos through their device camera, then customize and export a composed photo strip in multiple layouts and styles.
+A browser-based photo booth application that replicates the Korean photo booth (photobooth) experience. Users capture a sequence of photos through their device camera, customize and style photo strips, and export them as high-quality static images, animated GIFs, or MP4 videos.
 
 [Live Demo](https://klipklap-studio.vercel.app/)
 
@@ -64,10 +66,12 @@ src/
 
 ## Application Flow
 
-The application operates in two sequential screens controlled by `currentStep` in the global store.
+The system guides users through an intuitive 4-step workflow across two primary screens:
 
-1. **Booth** (`currentStep === 'booth'`) — User accesses the camera, sets a timer duration, and initiates a capture sequence. The application counts down and captures frames automatically, storing each as a base64-encoded data URL.
-2. **Studio** (`currentStep === 'studio'`) — Captured frames are composed onto a canvas according to the selected layout. The user applies filters, adjusts the frame, reorders photos, and exports the final result.
+1. **Capture (`Klip!`)** — *Booth Screen (`currentStep === 'booth'`)`: Access device webcam (or simulated camera), select countdown interval (3s, 5s, 10s), and perform automated multi-shot photo sequences.
+2. **Customize** — *Studio Screen (`currentStep === 'studio'`)`: Choose from 7 layout presets (1x4, 2x2, etc.), customize frame colors/spacing, and apply instant visual filters.
+3. **Reorder** — *Studio Screen (`currentStep === 'studio'`)`: Swap and reposition captured frames across layout slots using drag or quick-swap interactions.
+4. **Export (`Klap!`)** — *Studio Screen (`currentStep === 'studio'`)`: Render and download final outputs as static PNG photo strips, animated looping GIFs, or 24 FPS MP4 videos.
 
 ---
 
