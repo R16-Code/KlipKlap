@@ -1,4 +1,4 @@
-![KlipKlap - Your Interactive Digital Photo Booth & Studio](public/header.jpg)
+![KlipKlap - Your Interactive Digital Photo Booth & Studio](public/banner.jpg)
 
 # KlipKlap
 
