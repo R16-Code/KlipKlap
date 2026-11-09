@@ -45,7 +45,57 @@ export interface FilterOption {
   description: string;
 }
 
-export type FrameCategory = 'solid' | 'retro' | 'cute' | 'y2k';
+export type FrameCategory = 'solid' | 'pattern' | 'retro' | 'cute' | 'y2k';
+
+export type BackgroundPatternId =
+  | 'pattern_pastel_grid'
+  | 'pattern_checker_pink'
+  | 'pattern_checker_beige'
+  | 'pattern_polka_dots'
+  | 'pattern_polka_black'
+  | 'pattern_y2k_stars'
+  | 'pattern_vintage_paper'
+  | 'pattern_gradient_cotton'
+  | 'pattern_gradient_sunset'
+  | 'pattern_gradient_ocean';
+
+export interface BackgroundPatternOption {
+  id: BackgroundPatternId;
+  name: string;
+  emoji: string;
+  textColor: 'dark' | 'light';
+  tagline: string;
+  previewBg: string; // CSS style or gradient for UI buttons
+}
+
+export interface CustomBackground {
+  type: 'none' | 'preset' | 'upload';
+  presetId?: BackgroundPatternId;
+  imageUrl?: string; // Base64 data URL from imageOptimizer
+  textColor?: 'dark' | 'light'; // Text contrast for title, subtitle, date stamp
+  offsetX?: number; // -100 to 100 (horizontal pan percentage)
+  offsetY?: number; // -100 to 100 (vertical pan percentage)
+  zoom?: number; // 1.0 to 2.5 (zoom multiplier)
+}
+
+export type StickerCategory = 'cute' | 'props' | 'y2k' | 'stamps';
+
+export interface StickerDefinition {
+  id: string;
+  name: string;
+  category: StickerCategory;
+  svgDataUrl: string;
+}
+
+export interface PlacedSticker {
+  id: string;
+  stickerId: string;
+  x: number; // Normalized 0.0 to 1.0 relative to canvas width
+  y: number; // Normalized 0.0 to 1.0 relative to canvas height
+  scale: number; // Scale multiplier (0.4 to 2.5, default 1.0)
+  rotation: number; // Degrees (-180 to 180, default 0)
+  flipX?: boolean;
+}
 
 export interface FrameOption {
   id: string;

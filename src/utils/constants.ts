@@ -1,4 +1,4 @@
-import type { LayoutConfig, FrameOption, FilterOption, LayoutType } from '../types';
+import type { LayoutConfig, FrameOption, FilterOption, LayoutType, BackgroundPatternOption } from '../types';
 
 export const LAYOUT_CONFIGS: Record<LayoutType, LayoutConfig> = {
   strip_1x4: {
@@ -480,6 +480,89 @@ export const FRAME_OPTIONS: FrameOption[] = [
     borderColor: '#CBD5E1',
     borderPreviewClass: 'bg-[#151722] border border-slate-400 text-slate-100',
     tagline: 'Metallic 4-point chrome starbursts with diamond sparkles',
+  },
+];
+
+export const BACKGROUND_PATTERNS: BackgroundPatternOption[] = [
+  {
+    id: 'pattern_pastel_grid',
+    name: 'Pastel Grid',
+    emoji: '📐',
+    textColor: 'dark',
+    tagline: 'Minimalist Korean aesthetic grid notebook',
+    previewBg: 'bg-[#FAF8F5] border border-indigo-200',
+  },
+  {
+    id: 'pattern_checker_pink',
+    name: 'Pink Checkered',
+    emoji: '🏁',
+    textColor: 'dark',
+    tagline: 'Cute soft pastel pink & white gingham',
+    previewBg: 'bg-[#FFF0F3] border border-pink-200',
+  },
+  {
+    id: 'pattern_checker_beige',
+    name: 'Café Checker',
+    emoji: '☕',
+    textColor: 'dark',
+    tagline: 'Cozy oat latte and cream checkerboard',
+    previewBg: 'bg-[#F5EFE6] border border-amber-200',
+  },
+  {
+    id: 'pattern_polka_dots',
+    name: 'Blush Polka',
+    emoji: '🫧',
+    textColor: 'dark',
+    tagline: 'Whimsical pastel pink dots on ivory',
+    previewBg: 'bg-[#FFFDF9] border border-rose-200',
+  },
+  {
+    id: 'pattern_polka_black',
+    name: 'Chic Polka',
+    emoji: '⚪',
+    textColor: 'dark',
+    tagline: 'Classic editorial monochrome polka dots',
+    previewBg: 'bg-white border border-neutral-300',
+  },
+  {
+    id: 'pattern_y2k_stars',
+    name: 'Midnight Stars',
+    emoji: '✨',
+    textColor: 'light',
+    tagline: 'Deep cosmic violet with cyber sparkles',
+    previewBg: 'bg-[#151226] border border-purple-800 text-white',
+  },
+  {
+    id: 'pattern_vintage_paper',
+    name: 'Kraft Paper',
+    emoji: '📜',
+    textColor: 'dark',
+    tagline: 'Warm analog textured scrapbook paper',
+    previewBg: 'bg-[#F3E9D2] border border-amber-300',
+  },
+  {
+    id: 'pattern_gradient_cotton',
+    name: 'Cotton Candy',
+    emoji: '🍭',
+    textColor: 'dark',
+    tagline: 'Dreamy pastel pink, lavender & soft sky',
+    previewBg: 'bg-gradient-to-b from-pink-200 via-purple-200 to-sky-200',
+  },
+  {
+    id: 'pattern_gradient_sunset',
+    name: 'Golden Sunset',
+    emoji: '🌅',
+    textColor: 'dark',
+    tagline: 'Warm coral, golden hour apricot & cream',
+    previewBg: 'bg-gradient-to-b from-rose-300 via-amber-200 to-yellow-100',
+  },
+  {
+    id: 'pattern_gradient_ocean',
+    name: 'Haru Breeze',
+    emoji: '🌊',
+    textColor: 'light',
+    tagline: 'Refreshing mint green to deep ocean blue',
+    previewBg: 'bg-gradient-to-b from-emerald-300 via-sky-400 to-blue-600 text-white',
   },
 ];
 

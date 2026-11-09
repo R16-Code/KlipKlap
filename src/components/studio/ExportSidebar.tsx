@@ -10,6 +10,8 @@ export const ExportSidebar: React.FC = () => {
     capturedPhotos,
     layout,
     selectedFrame,
+    customBackground,
+    placedStickers,
     selectedFilter,
     studioSettings,
     updateStudioSettings,
@@ -53,6 +55,8 @@ export const ExportSidebar: React.FC = () => {
           filter: selectedFilter,
           settings: studioSettings,
           scale: 2.5, // 300 DPI high-res scale
+          customBackground,
+          placedStickers,
         },
         'png'
       );
@@ -100,6 +104,8 @@ export const ExportSidebar: React.FC = () => {
         settings: studioSettings,
         durationSeconds: timerDuration,
         videoElements: studioVideoElements || undefined,
+        customBackground,
+        placedStickers,
       };
 
       if (format === 'mp4') {

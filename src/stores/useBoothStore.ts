@@ -8,6 +8,8 @@ import type {
   StudioSettings,
   SlotCalibration,
   StudioPreviewMode,
+  CustomBackground,
+  PlacedSticker,
 } from '../types';
 
 interface BoothState {
@@ -56,6 +58,15 @@ interface BoothState {
   // Studio customization
   selectedFrame: string;
   setSelectedFrame: (frameId: string) => void;
+  customBackground: CustomBackground | null;
+  setCustomBackground: (customBackground: CustomBackground | null) => void;
+  placedStickers: PlacedSticker[];
+  selectedStickerId: string | null;
+  setSelectedStickerId: (id: string | null) => void;
+  addSticker: (stickerId: string) => void;
+  updateSticker: (id: string, patch: Partial<PlacedSticker>) => void;
+  removeSticker: (id: string) => void;
+  clearStickers: () => void;
   selectedFilter: FilterType;
   setSelectedFilter: (filter: FilterType) => void;
   studioSettings: StudioSettings;
@@ -231,11 +242,52 @@ export const useBoothStore = create<BoothState>((set, get) => ({
       capturedPhotos: [],
       selectedFilter: 'normal',
       selectedFrame: 'cloud_white',
+      customBackground: null,
+      placedStickers: [],
+      selectedStickerId: null,
     });
   },
 
   selectedFrame: 'cloud_white',
-  setSelectedFrame: (frameId) => set({ selectedFrame: frameId }),
+  setSelectedFrame: (frameId) => set({ selectedFrame: frameId, customBackground: null }),
+
+  customBackground: null,
+  setCustomBackground: (customBackground) => set({ customBackground }),
+
+  placedStickers: [],
+  selectedStickerId: null,
+  setSelectedStickerId: (selectedStickerId) => set({ selectedStickerId }),
+  addSticker: (stickerId) => {
+    set((state) => {
+      const count = state.placedStickers.length;
+      const offsetStep = ((count % 5) - 2) * 0.04;
+      const newSticker: PlacedSticker = {
+        id: `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        stickerId,
+        x: Math.max(0.15, Math.min(0.85, 0.5 + offsetStep)),
+        y: Math.max(0.15, Math.min(0.85, 0.45 + offsetStep)),
+        scale: 1.0,
+        rotation: 0,
+        flipX: false,
+      };
+      return {
+        placedStickers: [...state.placedStickers, newSticker],
+        selectedStickerId: newSticker.id,
+      };
+    });
+  },
+  updateSticker: (id, patch) => {
+    set((state) => ({
+      placedStickers: state.placedStickers.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }));
+  },
+  removeSticker: (id) => {
+    set((state) => ({
+      placedStickers: state.placedStickers.filter((s) => s.id !== id),
+      selectedStickerId: state.selectedStickerId === id ? null : state.selectedStickerId,
+    }));
+  },
+  clearStickers: () => set({ placedStickers: [], selectedStickerId: null }),
 
   selectedFilter: 'normal',
   setSelectedFilter: (filter) => set({ selectedFilter: filter }),

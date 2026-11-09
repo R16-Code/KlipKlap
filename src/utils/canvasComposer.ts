@@ -1,5 +1,6 @@
-import type { LayoutType, FilterType, CapturedPhoto, StudioSettings } from '../types';
+import type { LayoutType, FilterType, CapturedPhoto, StudioSettings, CustomBackground, BackgroundPatternId, PlacedSticker } from '../types';
 import { FRAME_OPTIONS, LAYOUT_CONFIGS } from './constants';
+import { preloadAllStickerImages, getStickerImageMap } from './stickers';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
@@ -13,6 +14,9 @@ export interface ComposeOptions {
   previewMode?: 'photo' | 'motion';
   videoElements?: Map<number, HTMLVideoElement>;
   durationSeconds?: number; // Custom recording duration matching timerDuration
+  customBackground?: CustomBackground | null;
+  customBgImage?: HTMLImageElement | null;
+  placedStickers?: PlacedSticker[];
 }
 
 export interface LayoutDimensions {
@@ -334,6 +338,238 @@ function drawCoverVideo(
     ctx.restore();
     return false;
   }
+}
+
+/**
+ * Draws image with object-fit: cover into the entire canvas background,
+ * supporting user-controlled horizontal/vertical pan (-100 to 100) and zoom (1.0 to 2.5).
+ */
+export function drawBackgroundCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  width: number,
+  height: number,
+  offsetX = 0,
+  offsetY = 0,
+  zoom = 1
+) {
+  const imgW = img.naturalWidth || img.width;
+  const imgH = img.naturalHeight || img.height;
+  if (!imgW || !imgH) return;
+
+  const baseScale = Math.max(width / imgW, height / imgH);
+  // Guarantee smooth pan headroom even along the fitted axis when user adjusts sliders at 1x zoom
+  const minPanScaleX = offsetX !== 0 ? (width * (1 + Math.abs(offsetX) / 250)) / imgW : 0;
+  const minPanScaleY = offsetY !== 0 ? (height * (1 + Math.abs(offsetY) / 250)) / imgH : 0;
+
+  const effectiveScale = Math.max(baseScale, minPanScaleX, minPanScaleY) * Math.max(1, zoom);
+  const drawnW = imgW * effectiveScale;
+  const drawnH = imgH * effectiveScale;
+
+  const maxPanX = Math.max(0, (drawnW - width) / 2);
+  const maxPanY = Math.max(0, (drawnH - height) / 2);
+
+  const dx = (width - drawnW) / 2 - (offsetX / 100) * maxPanX;
+  const dy = (height - drawnH) / 2 - (offsetY / 100) * maxPanY;
+
+  ctx.drawImage(img, dx, dy, drawnW, drawnH);
+}
+
+/**
+ * Procedurally draws rich photobooth patterns and textures directly onto the canvas
+ */
+export function drawPresetPattern(
+  ctx: CanvasRenderingContext2D,
+  presetId: BackgroundPatternId,
+  dim: LayoutDimensions,
+  scale: number
+) {
+  ctx.save();
+
+  switch (presetId) {
+    case 'pattern_pastel_grid': {
+      // Cream paper base
+      ctx.fillStyle = '#FAF8F5';
+      ctx.fillRect(0, 0, dim.width, dim.height);
+
+      // Thin subtle grid lines
+      ctx.strokeStyle = '#E2DFEB';
+      ctx.lineWidth = Math.max(1, 1 * scale);
+      const step = 24 * scale;
+
+      ctx.beginPath();
+      for (let x = 0; x <= dim.width; x += step) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, dim.height);
+      }
+      for (let y = 0; y <= dim.height; y += step) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(dim.width, y);
+      }
+      ctx.stroke();
+      break;
+    }
+
+    case 'pattern_checker_pink': {
+      const step = 28 * scale;
+      const cols = Math.ceil(dim.width / step);
+      const rows = Math.ceil(dim.height / step);
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? '#FFF0F3' : '#FFFFFF';
+          ctx.fillRect(c * step, r * step, step, step);
+        }
+      }
+      break;
+    }
+
+    case 'pattern_checker_beige': {
+      const step = 28 * scale;
+      const cols = Math.ceil(dim.width / step);
+      const rows = Math.ceil(dim.height / step);
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          ctx.fillStyle = (r + c) % 2 === 0 ? '#F5EFE6' : '#E8DEC8';
+          ctx.fillRect(c * step, r * step, step, step);
+        }
+      }
+      break;
+    }
+
+    case 'pattern_polka_dots': {
+      ctx.fillStyle = '#FFFDF9';
+      ctx.fillRect(0, 0, dim.width, dim.height);
+
+      ctx.fillStyle = '#FBCFE8';
+      const stepX = 28 * scale;
+      const stepY = 28 * scale;
+      const radius = 3 * scale;
+
+      for (let y = stepY / 2; y < dim.height; y += stepY) {
+        const isOffset = Math.floor(y / stepY) % 2 === 1;
+        const startX = isOffset ? stepX / 2 : 0;
+        for (let x = startX; x < dim.width; x += stepX) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case 'pattern_polka_black': {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, dim.width, dim.height);
+
+      ctx.fillStyle = '#1A1A1A';
+      const stepX = 32 * scale;
+      const stepY = 32 * scale;
+      const radius = 2.4 * scale;
+
+      for (let y = stepY / 2; y < dim.height; y += stepY) {
+        const isOffset = Math.floor(y / stepY) % 2 === 1;
+        const startX = isOffset ? stepX / 2 : 0;
+        for (let x = startX; x < dim.width; x += stepX) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case 'pattern_y2k_stars': {
+      ctx.fillStyle = '#151226';
+      ctx.fillRect(0, 0, dim.width, dim.height);
+
+      const drawMiniStar = (cx: number, cy: number, r: number) => {
+        ctx.fillStyle = '#E9D5FF';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r);
+        ctx.quadraticCurveTo(cx, cy, cx + r, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy + r);
+        ctx.quadraticCurveTo(cx, cy, cx - r, cy);
+        ctx.quadraticCurveTo(cx, cy, cx, cy - r);
+        ctx.fill();
+      };
+
+      const step = 46 * scale;
+      for (let y = 16 * scale; y < dim.height; y += step) {
+        const isOffset = Math.floor(y / step) % 2 === 1;
+        const startX = isOffset ? step / 2 : 16 * scale;
+        for (let x = startX; x < dim.width; x += step) {
+          drawMiniStar(x, y, 5 * scale);
+        }
+      }
+
+      // Scatter tiny sparkling dots
+      ctx.fillStyle = '#818CF8';
+      for (let y = 30 * scale; y < dim.height; y += step) {
+        for (let x = 20 * scale; x < dim.width; x += step) {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.2 * scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case 'pattern_vintage_paper': {
+      ctx.fillStyle = '#F3E9D2';
+      ctx.fillRect(0, 0, dim.width, dim.height);
+
+      // Subtle organic fibers
+      ctx.fillStyle = 'rgba(150, 110, 60, 0.04)';
+      const step = 20 * scale;
+      for (let y = 0; y < dim.height; y += step) {
+        for (let x = 0; x < dim.width; x += step) {
+          if ((x + y) % 3 === 0) {
+            ctx.fillRect(x, y, 3 * scale, 1.5 * scale);
+          }
+        }
+      }
+
+      // Soft vignette border
+      ctx.strokeStyle = 'rgba(120, 80, 40, 0.15)';
+      ctx.lineWidth = 4 * scale;
+      ctx.strokeRect(2 * scale, 2 * scale, dim.width - 4 * scale, dim.height - 4 * scale);
+      break;
+    }
+
+    case 'pattern_gradient_cotton': {
+      const grad = ctx.createLinearGradient(0, 0, 0, dim.height);
+      grad.addColorStop(0, '#FED7E2'); // rose
+      grad.addColorStop(0.5, '#E9D5FF'); // lavender
+      grad.addColorStop(1, '#BAE6FD'); // sky
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, dim.width, dim.height);
+      break;
+    }
+
+    case 'pattern_gradient_sunset': {
+      const grad = ctx.createLinearGradient(0, 0, 0, dim.height);
+      grad.addColorStop(0, '#FCA5A5'); // coral rose
+      grad.addColorStop(0.5, '#FDBA74'); // golden peach
+      grad.addColorStop(1, '#FEF08A'); // warm butter
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, dim.width, dim.height);
+      break;
+    }
+
+    case 'pattern_gradient_ocean': {
+      const grad = ctx.createLinearGradient(0, 0, 0, dim.height);
+      grad.addColorStop(0, '#A7F3D0'); // fresh mint
+      grad.addColorStop(0.45, '#7DD3FC'); // sky
+      grad.addColorStop(1, '#3B82F6'); // ocean blue
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, dim.width, dim.height);
+      break;
+    }
+  }
+
+  ctx.restore();
 }
 
 /**
@@ -788,15 +1024,35 @@ export function renderPhotostripSync(
   preloadedImages: Map<number, HTMLImageElement>,
   videoElements?: Map<number, HTMLVideoElement>
 ): void {
-  const { photos, layout, frameId, filter, settings, scale = 1, previewMode = 'photo' } = options;
+  const { photos, layout, frameId, filter, settings, scale = 1, previewMode = 'photo', customBackground, customBgImage, placedStickers } = options;
   const frame = FRAME_OPTIONS.find((f) => f.id === frameId) || FRAME_OPTIONS[0];
 
-  // 1. Draw solid frame background
-  ctx.fillStyle = frame.color || '#FFFFFF';
-  ctx.fillRect(0, 0, dim.width, dim.height);
+  const isCustomBg = Boolean(customBackground && customBackground.type !== 'none');
+  const isLightText = isCustomBg
+    ? customBackground?.textColor === 'light'
+    : false;
 
-  // 2. Draw theme decorations (retro film sprockets, cherries, daisies, clouds, etc.)
-  drawFrameThemedDecorations(ctx, frame.id, dim, scale);
+  // 1. Draw frame background (Custom image, preset pattern, or solid color)
+  if (isCustomBg && customBackground?.type === 'upload' && customBgImage) {
+    drawBackgroundCover(
+      ctx,
+      customBgImage,
+      dim.width,
+      dim.height,
+      customBackground.offsetX ?? 0,
+      customBackground.offsetY ?? 0,
+      customBackground.zoom ?? 1
+    );
+  } else if (isCustomBg && customBackground?.type === 'preset' && customBackground?.presetId) {
+    drawPresetPattern(ctx, customBackground.presetId, dim, scale);
+  } else {
+    // Solid frame background
+    ctx.fillStyle = frame.color || '#FFFFFF';
+    ctx.fillRect(0, 0, dim.width, dim.height);
+
+    // 2. Draw theme decorations (retro film sprockets, cherries, daisies, clouds, etc.)
+    drawFrameThemedDecorations(ctx, frame.id, dim, scale);
+  }
 
   // 3. Render photo slots dynamically based on layout config
   const config = LAYOUT_CONFIGS[layout] || LAYOUT_CONFIGS['strip_1x4'];
@@ -867,17 +1123,18 @@ export function renderPhotostripSync(
     } else if (!videoDrawn && !img) {
       // Empty slot placeholder
       ctx.save();
-      const isDarkFrame =
-        frame.id === 'matte_charcoal' ||
-        frame.id === 'midnight_navy' ||
-        frame.id === 'wine_bordeaux' ||
-        frame.id === 'retro_film' ||
-        frame.id === 'retro_cassette' ||
-        frame.id === 'retro_vhs' ||
-        frame.id === 'y2k_holo' ||
-        frame.id === 'y2k_pixel' ||
-        frame.id === 'y2k_cyberpunk' ||
-        frame.id === 'y2k_glitter_star';
+      const isDarkFrame = isCustomBg
+        ? isLightText
+        : (frame.id === 'matte_charcoal' ||
+          frame.id === 'midnight_navy' ||
+          frame.id === 'wine_bordeaux' ||
+          frame.id === 'retro_film' ||
+          frame.id === 'retro_cassette' ||
+          frame.id === 'retro_vhs' ||
+          frame.id === 'y2k_holo' ||
+          frame.id === 'y2k_pixel' ||
+          frame.id === 'y2k_cyberpunk' ||
+          frame.id === 'y2k_glitter_star');
 
       ctx.fillStyle = isDarkFrame
         ? 'rgba(255, 255, 255, 0.08)'
@@ -891,7 +1148,11 @@ export function renderPhotostripSync(
       ctx.fill();
 
       // Slot index text
-      ctx.fillStyle = frame.subtextColor;
+      const slotTextColor = isCustomBg
+        ? (isLightText ? 'rgba(255, 255, 255, 0.75)' : '#737373')
+        : frame.subtextColor;
+
+      ctx.fillStyle = slotTextColor;
       ctx.font = `500 ${13 * scale}px "Plus Jakarta Sans", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -906,41 +1167,81 @@ export function renderPhotostripSync(
   ctx.save();
   ctx.textAlign = 'center';
 
+  const footerTitleColor = isCustomBg
+    ? (isLightText ? '#FFFFFF' : '#1A1A1A')
+    : frame.textColor;
+
+  const footerSubtextColor = isCustomBg
+    ? (isLightText ? 'rgba(255, 255, 255, 0.75)' : '#737373')
+    : frame.subtextColor;
+
+  const outerBorderColor = isCustomBg
+    ? (isLightText ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.15)')
+    : (frame.borderColor || 'rgba(0, 0, 0, 0.15)');
+
   // Title
-  ctx.fillStyle = frame.textColor;
+  ctx.fillStyle = footerTitleColor;
   ctx.font = `700 ${14 * scale}px "Plus Jakarta Sans", sans-serif`;
   ctx.letterSpacing = `${2 * scale}px`;
   ctx.fillText(settings.title, dim.width / 2, footerCenterY - 10 * scale);
 
   // Subtitle
-  ctx.fillStyle = frame.subtextColor;
+  ctx.fillStyle = footerSubtextColor;
   ctx.font = `500 ${10 * scale}px "Plus Jakarta Sans", sans-serif`;
   ctx.letterSpacing = `${1.5 * scale}px`;
   ctx.fillText(settings.subtitle, dim.width / 2, footerCenterY + 7 * scale);
 
-  // Date Stamp
+  // Date Stamp (Date, Month, Year only)
   if (settings.showDate) {
     const today = new Date();
     const formattedDate = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(
       today.getDate()
-    ).padStart(2, '0')} • KLIPKLAP PHOTO`;
-    ctx.fillStyle = frame.subtextColor || '#737373';
+    ).padStart(2, '0')}`;
+    ctx.fillStyle = footerSubtextColor || '#737373';
     ctx.font = `400 ${8.5 * scale}px "Plus Jakarta Sans", monospace`;
     ctx.letterSpacing = `${1 * scale}px`;
     ctx.fillText(formattedDate, dim.width / 2, footerCenterY + 22 * scale);
   }
 
-  // Korean Studio signature at bottom right
-  ctx.fillStyle = frame.subtextColor;
-  ctx.font = `600 ${8 * scale}px "Plus Jakarta Sans", sans-serif`;
-  ctx.textAlign = 'right';
-  ctx.fillText('클립클랩', dim.width - dim.outerMarginX, dim.height - 12 * scale);
+  ctx.restore();
 
-  // 5. Draw clean outer border around entire canvas perimeter
-  ctx.strokeStyle = frame.borderColor || 'rgba(0, 0, 0, 0.15)';
+  // 5. Render Placed Stickers (draggable user decorations)
+  if (placedStickers && placedStickers.length > 0) {
+    const stickerMap = getStickerImageMap();
+    const baseStickerSize = dim.width * 0.2;
+
+    for (const sticker of placedStickers) {
+      const stickerImg = stickerMap.get(sticker.stickerId);
+      if (!stickerImg) continue;
+
+      const cx = sticker.x * dim.width;
+      const cy = sticker.y * dim.height;
+      const sSize = baseStickerSize * (sticker.scale || 1);
+
+      const imgW = stickerImg.naturalWidth || 120;
+      const imgH = stickerImg.naturalHeight || 120;
+      const aspect = imgW / imgH;
+      const drawW = aspect >= 1 ? sSize : sSize * aspect;
+      const drawH = aspect >= 1 ? sSize / aspect : sSize;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (sticker.rotation) {
+        ctx.rotate((sticker.rotation * Math.PI) / 180);
+      }
+      if (sticker.flipX) {
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(stickerImg, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.restore();
+    }
+  }
+
+  // 6. Draw clean outer border around entire canvas perimeter
+  ctx.save();
+  ctx.strokeStyle = outerBorderColor;
   ctx.lineWidth = 1.5 * scale;
   ctx.strokeRect(0.75 * scale, 0.75 * scale, dim.width - 1.5 * scale, dim.height - 1.5 * scale);
-
   ctx.restore();
 }
 
@@ -962,6 +1263,20 @@ export async function composePhotostrip(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  if (options.placedStickers && options.placedStickers.length > 0) {
+    await preloadAllStickerImages();
+  }
+
+  // Preload custom background image if upload mode
+  let customBgImg: HTMLImageElement | null = options.customBgImage || null;
+  if (!customBgImg && options.customBackground?.type === 'upload' && options.customBackground.imageUrl) {
+    try {
+      customBgImg = await loadImage(options.customBackground.imageUrl);
+    } catch {
+      // ignore
+    }
+  }
+
   // Preload all available photo images mapped by poseIndex
   const photoImageMap = new Map<number, HTMLImageElement>();
   await Promise.all(
@@ -975,7 +1290,7 @@ export async function composePhotostrip(
     })
   );
 
-  renderPhotostripSync(ctx, dim, options, photoImageMap, videoElements);
+  renderPhotostripSync(ctx, dim, { ...options, customBgImage: customBgImg }, photoImageMap, videoElements);
 }
 
 /**
@@ -1082,6 +1397,20 @@ export async function downloadLiveMotionGIF(
     })
   );
 
+  // Preload custom background image if needed
+  let customBgImg: HTMLImageElement | null = options.customBgImage || null;
+  if (!customBgImg && options.customBackground?.type === 'upload' && options.customBackground.imageUrl) {
+    try {
+      customBgImg = await loadImage(options.customBackground.imageUrl);
+    } catch {
+      // ignore load failure
+    }
+  }
+
+  if (options.placedStickers && options.placedStickers.length > 0) {
+    await preloadAllStickerImages();
+  }
+
   // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM
   const usingExternalVideos = Boolean(options.videoElements && options.videoElements.size > 0);
   const videoMap = usingExternalVideos
@@ -1173,7 +1502,7 @@ export async function downloadLiveMotionGIF(
     renderPhotostripSync(
       ctx,
       dim,
-      { ...options, scale, previewMode: 'motion' },
+      { ...options, scale, previewMode: 'motion', customBgImage: customBgImg },
       photoImageMap,
       videoMap
     );
@@ -1409,6 +1738,20 @@ export async function downloadLiveMotionMP4(
     })
   );
 
+  // Preload custom background image if needed
+  let customBgImg: HTMLImageElement | null = options.customBgImage || null;
+  if (!customBgImg && options.customBackground?.type === 'upload' && options.customBackground.imageUrl) {
+    try {
+      customBgImg = await loadImage(options.customBackground.imageUrl);
+    } catch {
+      // ignore load failure
+    }
+  }
+
+  if (options.placedStickers && options.placedStickers.length > 0) {
+    await preloadAllStickerImages();
+  }
+
   // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM
   const usingExternalVideos = Boolean(options.videoElements && options.videoElements.size > 0);
   const videoMap = usingExternalVideos
@@ -1484,7 +1827,7 @@ export async function downloadLiveMotionMP4(
 
   if (!supportsWebCodecs) {
     return downloadLiveMotionMediaRecorderFallback(
-      options,
+      { ...options, customBgImage: customBgImg },
       offscreenCanvas,
       ctx,
       dim,
@@ -1568,7 +1911,7 @@ export async function downloadLiveMotionMP4(
     renderPhotostripSync(
       ctx,
       dim,
-      { ...options, scale, previewMode: 'motion' },
+      { ...options, scale, previewMode: 'motion', customBgImage: customBgImg },
       photoImageMap,
       videoMap
     );
