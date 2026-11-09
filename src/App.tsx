@@ -7,6 +7,7 @@ import { MobileBoothDock } from './components/booth/MobileBoothDock';
 import { LayoutSelector } from './components/studio/LayoutSelector';
 import { PhotoReorderTray } from './components/studio/PhotoReorderTray';
 import { FramePicker } from './components/studio/FramePicker';
+import { StickerPicker } from './components/studio/StickerPicker';
 import { FilterPicker } from './components/studio/FilterPicker';
 import { EditorCanvas } from './components/studio/EditorCanvas';
 import { ExportSidebar } from './components/studio/ExportSidebar';
@@ -130,7 +131,10 @@ export const App: React.FC = () => {
                 {/* 3. Frame Color Picker & Slot Calibrator */}
                 <FramePicker />
 
-                {/* 4. Filter Preset Picker */}
+                {/* 4. Stickers & Draggable Props */}
+                <StickerPicker />
+
+                {/* 5. Filter Preset Picker */}
                 <FilterPicker />
               </aside>
 

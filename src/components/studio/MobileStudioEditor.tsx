@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   ArrowLeft,
   Download,
@@ -17,14 +17,25 @@ import {
   AlertTriangle,
   Heart,
   Video,
+  Upload,
+  Image as ImageIcon,
+  Sun,
+  Moon,
+  Loader2,
+  Smile,
+  FlipHorizontal,
+  RotateCcw,
+  Move,
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
-import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS } from '../../utils/constants';
+import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS, BACKGROUND_PATTERNS } from '../../utils/constants';
+import { STICKER_CATALOG } from '../../utils/stickers';
 import { downloadHighResPhotostrip, downloadLiveMotionGIF, downloadLiveMotionMP4 } from '../../utils/canvasComposer';
+import { optimizeBackgroundImage } from '../../utils/imageOptimizer';
 import { EditorCanvas } from './EditorCanvas';
 import { SlotCalibrator } from './SlotCalibrator';
 import confetti from 'canvas-confetti';
-import type { LayoutType, FrameCategory, FilterType } from '../../types';
+import type { LayoutType, FrameCategory, FilterType, StickerCategory } from '../../types';
 
 export const MobileStudioEditor: React.FC = () => {
   const {
@@ -33,6 +44,14 @@ export const MobileStudioEditor: React.FC = () => {
     setLayout,
     selectedFrame,
     setSelectedFrame,
+    customBackground,
+    setCustomBackground,
+    placedStickers,
+    selectedStickerId,
+    addSticker,
+    updateSticker,
+    removeSticker,
+    clearStickers,
     selectedFilter,
     setSelectedFilter,
     studioSettings,
@@ -45,8 +64,11 @@ export const MobileStudioEditor: React.FC = () => {
     setIsExportingVideo: setGlobalIsExportingVideo,
   } = useBoothStore();
 
-  const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'filters' | 'caption' | null>(null);
+  const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'stickers' | 'filters' | 'caption' | null>(null);
   const [frameCategory, setFrameCategory] = useState<FrameCategory | 'all'>('all');
+  const [stickerCategory, setStickerCategory] = useState<StickerCategory>('cute');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingVideo, setIsExportingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -68,6 +90,7 @@ export const MobileStudioEditor: React.FC = () => {
   const frameCategories: { id: FrameCategory | 'all'; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'solid', label: 'Solid' },
+    { id: 'pattern', label: 'Motif 🏁' },
     { id: 'retro', label: 'Retro 🎞️' },
     { id: 'cute', label: 'Cute 🍒' },
     { id: 'y2k', label: 'Y2K 👾' },
@@ -81,6 +104,30 @@ export const MobileStudioEditor: React.FC = () => {
   const layoutConfig = LAYOUT_CONFIGS[layout];
   const requiredPhotos = layoutConfig.photoCount;
   const isIncomplete = capturedPhotos.length < requiredPhotos;
+
+  const handleMobileFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const dataUrl = await optimizeBackgroundImage(file, 1600);
+      setCustomBackground({
+        type: 'upload',
+        imageUrl: dataUrl,
+        textColor: 'dark',
+        offsetX: 0,
+        offsetY: 0,
+        zoom: 1,
+      });
+    } catch (err) {
+      console.error('Failed to process image:', err);
+      alert('Gagal memproses gambar. Pastikan format file adalah gambar valid.');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleDownload = async () => {
     if (isExporting || capturedPhotos.length === 0) return;
@@ -102,6 +149,8 @@ export const MobileStudioEditor: React.FC = () => {
           filter: selectedFilter,
           settings: studioSettings,
           scale: 2.5,
+          customBackground,
+          placedStickers,
         },
         'png'
       );
@@ -147,6 +196,8 @@ export const MobileStudioEditor: React.FC = () => {
         settings: studioSettings,
         durationSeconds: timerDuration,
         videoElements: studioVideoElements || undefined,
+        customBackground,
+        placedStickers,
       };
 
       if (format === 'mp4') {
@@ -257,6 +308,8 @@ export const MobileStudioEditor: React.FC = () => {
                   ? 'Pilih Layout'
                   : activeTab === 'frames'
                   ? 'Frame Color & Theme'
+                  : activeTab === 'stickers'
+                  ? 'Stickers & Props'
                   : activeTab === 'filters'
                   ? 'Filter Preset'
                   : 'Caption & Archive Stamp'}
@@ -308,14 +361,207 @@ export const MobileStudioEditor: React.FC = () => {
             {/* TAB 2: FRAMES */}
             {activeTab === 'frames' && (
               <div className="space-y-2">
-                {/* Category Pills */}
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1">
+                {/* Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  onChange={handleMobileFileUpload}
+                  className="hidden"
+                />
+
+                {/* Mobile Custom Upload Header / Card */}
+                <div className="p-2 rounded-xl bg-stone-50 border border-stone-200 shadow-soft-sm">
+                  {customBackground?.type === 'upload' ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden border border-black/15 shrink-0 bg-stone-200">
+                            <img
+                              src={customBackground.imageUrl}
+                              alt="Custom Background"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-bold text-studio-graphite truncate flex items-center gap-1">
+                              <span>Custom Foto</span>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                            </p>
+                            <p className="text-[9.5px] text-stone-500 truncate">
+                              Geser slider untuk atur posisi
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Contrast Toggle */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustomBackground({
+                                ...customBackground,
+                                textColor: customBackground.textColor === 'light' ? 'dark' : 'light',
+                              })
+                            }
+                            className="px-2 py-1 rounded-lg border border-stone-200 bg-white text-stone-700 text-[10px] font-semibold flex items-center gap-1"
+                          >
+                            {customBackground.textColor === 'light' ? (
+                              <>
+                                <Sun className="w-3 h-3 text-amber-500" />
+                                <span>Terang</span>
+                              </>
+                            ) : (
+                              <>
+                                <Moon className="w-3 h-3 text-indigo-500" />
+                                <span>Gelap</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Change image */}
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploading}
+                            className="p-1.5 rounded-lg border border-stone-200 bg-white text-stone-700"
+                          >
+                            {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                          </button>
+
+                          {/* Remove */}
+                          <button
+                            type="button"
+                            onClick={() => setCustomBackground(null)}
+                            className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Position & Zoom Sliders for Uploaded Background */}
+                      <div className="pt-1.5 border-t border-stone-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9.5px] font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1">
+                            <Move className="w-3 h-3 text-stone-500" />
+                            <span>Atur Posisi & Zoom Background</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustomBackground({
+                                ...customBackground,
+                                offsetX: 0,
+                                offsetY: 0,
+                                zoom: 1,
+                              })
+                            }
+                            className="text-[9.5px] font-semibold text-stone-500 flex items-center gap-0.5"
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>Reset</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <div className="flex justify-between text-[9px] text-stone-500">
+                              <span>Geser X</span>
+                              <span className="font-mono">{Math.round((customBackground.offsetX ?? 0) * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-1}
+                              max={1}
+                              step={0.02}
+                              value={customBackground.offsetX ?? 0}
+                              onChange={(e) =>
+                                setCustomBackground({
+                                  ...customBackground,
+                                  offsetX: parseFloat(e.target.value),
+                                })
+                              }
+                              className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-studio-charcoal"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-[9px] text-stone-500">
+                              <span>Geser Y</span>
+                              <span className="font-mono">{Math.round((customBackground.offsetY ?? 0) * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={-1}
+                              max={1}
+                              step={0.02}
+                              value={customBackground.offsetY ?? 0}
+                              onChange={(e) =>
+                                setCustomBackground({
+                                  ...customBackground,
+                                  offsetY: parseFloat(e.target.value),
+                                })
+                              }
+                              className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-studio-charcoal"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-[9px] text-stone-500">
+                              <span>Zoom</span>
+                              <span className="font-mono">{(customBackground.zoom ?? 1).toFixed(1)}x</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={1}
+                              max={2.5}
+                              step={0.05}
+                              value={customBackground.zoom ?? 1}
+                              onChange={(e) =>
+                                setCustomBackground({
+                                  ...customBackground,
+                                  zoom: parseFloat(e.target.value),
+                                })
+                              }
+                              className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-studio-charcoal"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="w-full py-1.5 px-2.5 rounded-lg border border-dashed border-stone-300 hover:border-studio-graphite bg-white text-stone-700 flex items-center justify-center gap-2 active:scale-98 transition-all"
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-studio-graphite" />
+                          <span className="text-[11px] font-semibold">Mengompres & Menyiapkan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="w-3.5 h-3.5 text-stone-600" />
+                          <span className="text-[11px] font-bold text-studio-graphite">
+                            + Upload Background Foto Sendiri
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Category Pills (3-column grid so nothing gets cut off) */}
+                <div className="grid grid-cols-3 gap-1 pb-0.5">
                   {frameCategories.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => setFrameCategory(cat.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[10.5px] font-semibold whitespace-nowrap transition-all ${
+                      className={`px-2 py-1 rounded-lg text-[10.5px] font-semibold text-center truncate transition-all ${
                         frameCategory === cat.id
                           ? 'bg-studio-charcoal text-white shadow-soft-sm'
                           : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
@@ -328,35 +574,215 @@ export const MobileStudioEditor: React.FC = () => {
 
                 {/* Horizontal Swatch Cards */}
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-                  {filteredFrames.map((frame) => {
-                    const isSelected = selectedFrame === frame.id;
-                    return (
-                      <button
-                        key={frame.id}
-                        type="button"
-                        onClick={() => setSelectedFrame(frame.id)}
-                        className={`p-2 rounded-xl border shrink-0 min-w-[90px] flex flex-col items-center gap-1 transition-all active:scale-95 ${
-                          isSelected
-                            ? 'border-studio-graphite bg-white ring-1 ring-studio-graphite shadow-soft'
-                            : 'border-stone-200 bg-stone-50'
-                        }`}
-                      >
-                        <div
-                          className="w-7 h-7 rounded-full shadow-inner border border-black/10 flex items-center justify-center relative"
-                          style={{ backgroundColor: frame.color }}
+                  {/* Preset Patterns (when in 'all' or 'pattern') */}
+                  {(frameCategory === 'all' || frameCategory === 'pattern') &&
+                    BACKGROUND_PATTERNS.map((pattern) => {
+                      const isSelected =
+                        customBackground?.type === 'preset' && customBackground.presetId === pattern.id;
+                      return (
+                        <button
+                          key={pattern.id}
+                          type="button"
+                          onClick={() =>
+                            setCustomBackground({
+                              type: 'preset',
+                              presetId: pattern.id,
+                              textColor: pattern.textColor,
+                            })
+                          }
+                          className={`p-2 rounded-xl border shrink-0 min-w-[90px] flex flex-col items-center gap-1 transition-all active:scale-95 ${
+                            isSelected
+                              ? 'border-studio-graphite bg-white ring-1 ring-studio-graphite shadow-soft'
+                              : 'border-stone-200 bg-stone-50'
+                          }`}
                         >
-                          {isSelected && <Check className="w-3.5 h-3.5 text-stone-900" />}
-                        </div>
-                        <span className="text-[11px] font-bold text-studio-graphite truncate max-w-[85px]">
-                          {frame.name}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <div
+                            className={`w-7 h-7 rounded-full shadow-inner flex items-center justify-center relative ${pattern.previewBg}`}
+                          >
+                            {isSelected && (
+                              <Check
+                                className={`w-3.5 h-3.5 ${
+                                  pattern.textColor === 'light' ? 'text-white' : 'text-stone-900'
+                                }`}
+                              />
+                            )}
+                          </div>
+                          <span className="text-[11px] font-bold text-studio-graphite truncate max-w-[85px]">
+                            {pattern.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+
+                  {/* Standard Frames */}
+                  {frameCategory !== 'pattern' &&
+                    filteredFrames.map((frame) => {
+                      const isSelected = !customBackground && selectedFrame === frame.id;
+                      return (
+                        <button
+                          key={frame.id}
+                          type="button"
+                          onClick={() => setSelectedFrame(frame.id)}
+                          className={`p-2 rounded-xl border shrink-0 min-w-[90px] flex flex-col items-center gap-1 transition-all active:scale-95 ${
+                            isSelected
+                              ? 'border-studio-graphite bg-white ring-1 ring-studio-graphite shadow-soft'
+                              : 'border-stone-200 bg-stone-50'
+                          }`}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-full shadow-inner border border-black/10 flex items-center justify-center relative"
+                            style={{ backgroundColor: frame.color }}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 text-stone-900" />}
+                          </div>
+                          <span className="text-[11px] font-bold text-studio-graphite truncate max-w-[85px]">
+                            {frame.name}
+                          </span>
+                        </button>
+                      );
+                    })}
                 </div>
 
                 {/* Calibrator Drawer */}
                 <SlotCalibrator />
+              </div>
+            )}
+
+            {/* TAB 2.5: STICKERS & PROPS */}
+            {activeTab === 'stickers' && (
+              <div className="space-y-2">
+                {/* Category Tabs + Clear All */}
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="grid grid-cols-4 gap-1 flex-1">
+                    {(
+                      [
+                        { id: 'cute', label: 'Cute 🎀' },
+                        { id: 'props', label: 'Props 🕶️' },
+                        { id: 'y2k', label: 'Y2K ✨' },
+                        { id: 'stamps', label: 'Stamps 💌' },
+                      ] as { id: StickerCategory; label: string }[]
+                    ).map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setStickerCategory(cat.id)}
+                        className={`py-1 px-1.5 rounded-lg text-[10px] font-semibold text-center truncate transition-all ${
+                          stickerCategory === cat.id
+                            ? 'bg-studio-charcoal text-white shadow-soft-sm'
+                            : 'bg-stone-100 text-stone-600'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {placedStickers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearStickers}
+                      className="px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-semibold shrink-0"
+                    >
+                      Reset ({placedStickers.length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Horizontal Sticker Catalog */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                  {STICKER_CATALOG.filter((s) => s.category === stickerCategory).map((sticker) => (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      onClick={() => addSticker(sticker.id)}
+                      className="p-2 rounded-xl border border-stone-200 bg-stone-50 shrink-0 min-w-[76px] flex flex-col items-center gap-1 active:scale-95 transition-all"
+                    >
+                      <div className="w-8 h-8 flex items-center justify-center">
+                        <img
+                          src={sticker.svgDataUrl}
+                          alt={sticker.name}
+                          className="w-full h-full object-contain pointer-events-none"
+                        />
+                      </div>
+                      <span className="text-[10px] font-semibold text-stone-700 truncate max-w-[70px]">
+                        {sticker.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Selected Sticker Quick Controls */}
+                {(() => {
+                  const activeSticker = placedStickers.find((s) => s.id === selectedStickerId);
+                  if (!activeSticker) {
+                    return (
+                      <p className="text-[10px] text-stone-500 text-center">
+                        Ketuk stiker untuk menambahkan, lalu geser langsung di atas frame.
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="p-2 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between gap-2">
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="flex justify-between text-[9px] text-stone-500">
+                            <span>Ukuran</span>
+                            <span className="font-mono">{Math.round(activeSticker.scale * 100)}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0.4}
+                            max={2.4}
+                            step={0.05}
+                            value={activeSticker.scale}
+                            onChange={(e) =>
+                              updateSticker(activeSticker.id, { scale: parseFloat(e.target.value) })
+                            }
+                            className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-studio-charcoal"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-[9px] text-stone-500">
+                            <span>Putar</span>
+                            <span className="font-mono">{Math.round(activeSticker.rotation)}°</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={-180}
+                            max={180}
+                            step={2}
+                            value={activeSticker.rotation}
+                            onChange={(e) =>
+                              updateSticker(activeSticker.id, { rotation: parseFloat(e.target.value) })
+                            }
+                            className="w-full h-1.5 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-studio-charcoal"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateSticker(activeSticker.id, { flipX: !activeSticker.flipX })
+                          }
+                          className="p-1.5 rounded-lg border border-stone-200 bg-white text-stone-700"
+                          title="Balik Horizontal"
+                        >
+                          <FlipHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSticker(activeSticker.id)}
+                          className="p-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700"
+                          title="Hapus Stiker"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -455,8 +881,8 @@ export const MobileStudioEditor: React.FC = () => {
           </div>
         )}
 
-        {/* 4 Bottom Navigation Tabs */}
-        <div className="grid grid-cols-4 border-b border-stone-200/60">
+        {/* 5 Bottom Navigation Tabs */}
+        <div className="grid grid-cols-5 border-b border-stone-200/60">
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'layouts' ? null : 'layouts')}
@@ -481,6 +907,24 @@ export const MobileStudioEditor: React.FC = () => {
           >
             <Palette className="w-4 h-4" />
             <span className="text-[10px] tracking-tight">Frames</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab(activeTab === 'stickers' ? null : 'stickers')}
+            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 relative ${
+              activeTab === 'stickers'
+                ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <Smile className="w-4 h-4" />
+            <span className="text-[10px] tracking-tight">Stickers</span>
+            {placedStickers.length > 0 && (
+              <span className="absolute top-1.5 right-3 w-3.5 h-3.5 rounded-full bg-studio-charcoal text-white text-[8px] font-bold flex items-center justify-center">
+                {placedStickers.length}
+              </span>
+            )}
           </button>
 
           <button

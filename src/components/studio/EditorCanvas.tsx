@@ -1,24 +1,52 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check, Sparkles } from 'lucide-react';
+import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check, Sparkles, X, FlipHorizontal, Maximize2 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { getLayoutDimensions, loadImage, renderPhotostripSync } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
+import { preloadAllStickerImages } from '../../utils/stickers';
 
 interface EditorCanvasProps {
   isDrawerOpen?: boolean;
 }
 
+interface DragState {
+  pointerId: number;
+  mode: 'move' | 'transform';
+  stickerId: string;
+  startClientX: number;
+  startClientY: number;
+  initialX: number;
+  initialY: number;
+  initialScale: number;
+  initialRotation: number;
+  centerClientX: number;
+  centerClientY: number;
+  startDist: number;
+  startAngle: number;
+}
+
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
   const videoElementsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
   const preloadedImagesRef = useRef<Map<number, HTMLImageElement>>(new Map());
+  const customBgImageRef = useRef<HTMLImageElement | null>(null);
   const [imagesLoadedKey, setImagesLoadedKey] = useState<number>(0);
+  const [bgLoadedKey, setBgLoadedKey] = useState<number>(0);
+  const [stickersLoadedKey, setStickersLoadedKey] = useState<number>(0);
 
   const {
     capturedPhotos,
     layout,
     setLayout,
     selectedFrame,
+    customBackground,
+    placedStickers,
+    selectedStickerId,
+    setSelectedStickerId,
+    updateSticker,
+    removeSticker,
     selectedFilter,
     studioSettings,
     setCurrentStep,
@@ -85,6 +113,150 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     };
   }, [capturedPhotos]);
 
+  // Preload custom background image whenever customBackground changes
+  useEffect(() => {
+    let isCurrent = true;
+    if (customBackground?.type === 'upload' && customBackground.imageUrl) {
+      loadImage(customBackground.imageUrl)
+        .then((img) => {
+          if (isCurrent) {
+            customBgImageRef.current = img;
+            setBgLoadedKey((k) => k + 1);
+          }
+        })
+        .catch(() => {
+          if (isCurrent) {
+            customBgImageRef.current = null;
+            setBgLoadedKey((k) => k + 1);
+          }
+        });
+    } else {
+      customBgImageRef.current = null;
+      setBgLoadedKey((k) => k + 1);
+    }
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [customBackground?.type, customBackground?.imageUrl]);
+
+  // Preload all SVG sticker images once into memory
+  useEffect(() => {
+    let isCurrent = true;
+    preloadAllStickerImages().then(() => {
+      if (isCurrent) {
+        setStickersLoadedKey((k) => k + 1);
+      }
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  // Pointer handlers for interactive sticker dragging, scaling & rotation
+  const handleStickerPointerDown = (e: React.PointerEvent, stickerId: string) => {
+    e.stopPropagation();
+    const sticker = placedStickers.find((s) => s.id === stickerId);
+    const overlay = overlayRef.current;
+    if (!sticker || !overlay) return;
+
+    setSelectedStickerId(stickerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const rect = overlay.getBoundingClientRect();
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      mode: 'move',
+      stickerId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      initialX: sticker.x,
+      initialY: sticker.y,
+      initialScale: sticker.scale,
+      initialRotation: sticker.rotation,
+      centerClientX: rect.left + sticker.x * rect.width,
+      centerClientY: rect.top + sticker.y * rect.height,
+      startDist: 1,
+      startAngle: 0,
+    };
+  };
+
+  const handleTransformPointerDown = (e: React.PointerEvent, stickerId: string) => {
+    e.stopPropagation();
+    const sticker = placedStickers.find((s) => s.id === stickerId);
+    const overlay = overlayRef.current;
+    if (!sticker || !overlay) return;
+
+    setSelectedStickerId(stickerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const rect = overlay.getBoundingClientRect();
+    const cx = rect.left + sticker.x * rect.width;
+    const cy = rect.top + sticker.y * rect.height;
+    const startDist = Math.max(8, Math.hypot(e.clientX - cx, e.clientY - cy));
+    const startAngle = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
+
+    dragStateRef.current = {
+      pointerId: e.pointerId,
+      mode: 'transform',
+      stickerId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      initialX: sticker.x,
+      initialY: sticker.y,
+      initialScale: sticker.scale,
+      initialRotation: sticker.rotation,
+      centerClientX: cx,
+      centerClientY: cy,
+      startDist,
+      startAngle,
+    };
+  };
+
+  const handleStickerPointerMove = (e: React.PointerEvent) => {
+    const drag = dragStateRef.current;
+    const overlay = overlayRef.current;
+    if (!drag || drag.pointerId !== e.pointerId || !overlay) return;
+
+    e.stopPropagation();
+    const rect = overlay.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    if (drag.mode === 'move') {
+      const dx = (e.clientX - drag.startClientX) / rect.width;
+      const dy = (e.clientY - drag.startClientY) / rect.height;
+      const nextX = Math.max(0.04, Math.min(0.96, drag.initialX + dx));
+      const nextY = Math.max(0.03, Math.min(0.97, drag.initialY + dy));
+      updateSticker(drag.stickerId, { x: nextX, y: nextY });
+    } else if (drag.mode === 'transform') {
+      const currDist = Math.max(8, Math.hypot(e.clientX - drag.centerClientX, e.clientY - drag.centerClientY));
+      const currAngle = (Math.atan2(e.clientY - drag.centerClientY, e.clientX - drag.centerClientX) * 180) / Math.PI;
+
+      const scaleRatio = currDist / drag.startDist;
+      const nextScale = Math.max(0.4, Math.min(2.5, Number((drag.initialScale * scaleRatio).toFixed(2))));
+
+      let nextRot = Math.round(drag.initialRotation + (currAngle - drag.startAngle));
+      while (nextRot > 180) nextRot -= 360;
+      while (nextRot < -180) nextRot += 360;
+
+      updateSticker(drag.stickerId, { scale: nextScale, rotation: nextRot });
+    }
+  };
+
+  const handleStickerPointerUp = (e: React.PointerEvent) => {
+    if (dragStateRef.current && dragStateRef.current.pointerId === e.pointerId) {
+      dragStateRef.current = null;
+    }
+  };
+
   // Synchronize playback of in-DOM video elements with previewMode
   useEffect(() => {
     if (previewMode === 'motion') {
@@ -148,6 +320,9 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
             settings: studioSettings,
             scale: previewScale,
             previewMode: 'motion',
+            customBackground,
+            customBgImage: customBgImageRef.current,
+            placedStickers,
           },
           preloadedImagesRef.current,
           videoElementsRef.current
@@ -177,6 +352,9 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
           settings: studioSettings,
           scale: previewScale,
           previewMode: 'photo',
+          customBackground,
+          customBgImage: customBgImageRef.current,
+          placedStickers,
         },
         preloadedImagesRef.current,
         videoElementsRef.current
@@ -186,10 +364,14 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
     capturedPhotos,
     layout,
     selectedFrame,
+    customBackground,
+    placedStickers,
     selectedFilter,
     studioSettings,
     previewMode,
     imagesLoadedKey,
+    bgLoadedKey,
+    stickersLoadedKey,
   ]);
 
   return (
@@ -362,18 +544,100 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
       )}
 
       {/* Photostrip Canvas Frame Wrapper (Realistic physical print feel) */}
-      <div className="relative z-10 flex-1 min-h-0 w-full flex items-center justify-center transition-all duration-300">
+      <div
+        className="relative z-10 flex-1 min-h-0 w-full flex items-center justify-center transition-all duration-300"
+        onClick={() => setSelectedStickerId(null)}
+      >
         {/* Soft studio ambient drop shadow */}
         <div className="relative rounded-xl sm:rounded-2xl shadow-photo border border-black/[0.08] bg-white flex items-center justify-center p-0.5">
-          <canvas
-            ref={canvasRef}
-            className={`block w-auto object-contain transition-all duration-300 max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] ${
-              isDrawerOpen
-                ? 'max-h-[35dvh] sm:max-h-[46dvh] lg:max-h-[66vh]'
-                : 'max-h-[56dvh] sm:max-h-[62dvh] lg:max-h-[66vh]'
-            }`}
-            style={{ imageRendering: 'auto' }}
-          />
+          <div ref={overlayRef} className="relative inline-block">
+            <canvas
+              ref={canvasRef}
+              className={`block w-auto object-contain transition-all duration-300 max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] ${
+                isDrawerOpen
+                  ? 'max-h-[35dvh] sm:max-h-[46dvh] lg:max-h-[66vh]'
+                  : 'max-h-[56dvh] sm:max-h-[62dvh] lg:max-h-[66vh]'
+              }`}
+              style={{ imageRendering: 'auto' }}
+            />
+
+            {/* Interactive Draggable / Resizable / Rotatable Sticker Overlay */}
+            {placedStickers.length > 0 && (
+              <div className="absolute inset-0 overflow-visible pointer-events-none z-20">
+                {placedStickers.map((sticker) => {
+                  const isSelected = selectedStickerId === sticker.id;
+                  const boxWidthPercent = 20 * (sticker.scale || 1);
+
+                  return (
+                    <div
+                      key={sticker.id}
+                      onPointerDown={(e) => handleStickerPointerDown(e, sticker.id)}
+                      onPointerMove={handleStickerPointerMove}
+                      onPointerUp={handleStickerPointerUp}
+                      onPointerCancel={handleStickerPointerUp}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        left: `${sticker.x * 100}%`,
+                        top: `${sticker.y * 100}%`,
+                        width: `${boxWidthPercent}%`,
+                        aspectRatio: '1 / 1',
+                        transform: `translate3d(-50%, -50%, 0) rotate(${sticker.rotation}deg)`,
+                      }}
+                      className={`absolute pointer-events-auto touch-none cursor-grab active:cursor-grabbing rounded-lg transition-shadow ${
+                        isSelected
+                          ? 'border-2 border-dashed border-amber-400 bg-amber-400/10 shadow-sm'
+                          : 'border border-transparent hover:border-white/70'
+                      }`}
+                    >
+                      {isSelected && (
+                        <>
+                          {/* Top-Right Delete Button */}
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeSticker(sticker.id);
+                            }}
+                            title="Hapus Stiker"
+                            className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md flex items-center justify-center active:scale-90"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+
+                          {/* Top-Left Flip Button */}
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSticker(sticker.id, { flipX: !sticker.flipX });
+                            }}
+                            title="Balik Stiker"
+                            className="absolute -top-2.5 -left-2.5 w-5 h-5 rounded-full bg-studio-charcoal hover:bg-black text-white shadow-md flex items-center justify-center active:scale-90"
+                          >
+                            <FlipHorizontal className="w-2.5 h-2.5" />
+                          </button>
+
+                          {/* Bottom-Right Resize & Rotate Drag Handle */}
+                          <div
+                            onPointerDown={(e) => handleTransformPointerDown(e, sticker.id)}
+                            onPointerMove={handleStickerPointerMove}
+                            onPointerUp={handleStickerPointerUp}
+                            onPointerCancel={handleStickerPointerUp}
+                            title="Tarik untuk Perbesar & Putar"
+                            className="absolute -bottom-2.5 -right-2.5 w-5 h-5 rounded-full bg-amber-500 hover:bg-amber-600 text-white shadow-md flex items-center justify-center cursor-nwse-resize touch-none"
+                          >
+                            <Maximize2 className="w-2.5 h-2.5" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Glossy Paper Sheen Overlay (Korean Photostrip paper finish) */}
           <div className="absolute inset-0 pointer-events-none rounded-xl sm:rounded-2xl bg-gradient-to-tr from-transparent via-white/[0.04] to-white/[0.12]" />
