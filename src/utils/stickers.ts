@@ -1,4 +1,4 @@
-import type { StickerDefinition } from '../types';
+import type { StickerDefinition, PlacedSticker } from '../types';
 
 /**
  * Helper to encode raw SVG markup into a lightweight, zero-network data URL.
@@ -957,4 +957,35 @@ export function preloadAllStickerImages(): Promise<Map<string, HTMLImageElement>
 
 export function getStickerImageMap(): Map<string, HTMLImageElement> {
   return stickerImageCache;
+}
+
+/**
+ * Registers an uploaded custom sticker data URL into the synchronous cache for immediate canvas rendering.
+ */
+export function registerCustomStickerImage(id: string, dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve) => {
+    if (stickerImageCache.has(id)) {
+      resolve(stickerImageCache.get(id)!);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      stickerImageCache.set(id, img);
+      resolve(img);
+    };
+    img.onerror = () => resolve(img);
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Ensures any user-uploaded custom stickers in placedStickers are preloaded into image cache
+ * before export or canvas drawing.
+ */
+export async function preloadPlacedStickers(placedStickers?: PlacedSticker[]): Promise<void> {
+  if (!placedStickers || placedStickers.length === 0) return;
+  const promises = placedStickers
+    .filter((s) => s.customDataUrl && !stickerImageCache.has(s.stickerId))
+    .map((s) => registerCustomStickerImage(s.stickerId, s.customDataUrl!));
+  await Promise.all(promises);
 }

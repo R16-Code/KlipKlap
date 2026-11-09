@@ -26,12 +26,14 @@ import {
   FlipHorizontal,
   RotateCcw,
   Move,
+  ImagePlus,
+  Info,
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS, BACKGROUND_PATTERNS } from '../../utils/constants';
 import { STICKER_CATALOG } from '../../utils/stickers';
 import { downloadHighResPhotostrip, downloadLiveMotionGIF, downloadLiveMotionMP4 } from '../../utils/canvasComposer';
-import { optimizeBackgroundImage } from '../../utils/imageOptimizer';
+import { optimizeBackgroundImage, optimizeStickerImage } from '../../utils/imageOptimizer';
 import { EditorCanvas } from './EditorCanvas';
 import { SlotCalibrator } from './SlotCalibrator';
 import confetti from 'canvas-confetti';
@@ -47,8 +49,10 @@ export const MobileStudioEditor: React.FC = () => {
     customBackground,
     setCustomBackground,
     placedStickers,
+    customStickers,
     selectedStickerId,
     addSticker,
+    addCustomSticker,
     updateSticker,
     removeSticker,
     clearStickers,
@@ -68,7 +72,9 @@ export const MobileStudioEditor: React.FC = () => {
   const [frameCategory, setFrameCategory] = useState<FrameCategory | 'all'>('all');
   const [stickerCategory, setStickerCategory] = useState<StickerCategory>('cute');
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingSticker, setIsUploadingSticker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileStickerInputRef = useRef<HTMLInputElement | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingVideo, setIsExportingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -126,6 +132,24 @@ export const MobileStudioEditor: React.FC = () => {
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleMobileStickerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingSticker(true);
+      const optimizedPng = await optimizeStickerImage(file, 512);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').slice(0, 16);
+      addCustomSticker(optimizedPng, cleanName || 'Stiker Saya');
+    } catch (err) {
+      console.error('Failed to process custom sticker:', err);
+      alert('Gagal memproses stiker. Pastikan format file PNG atau WebP.');
+    } finally {
+      setIsUploadingSticker(false);
+      if (mobileStickerInputRef.current) mobileStickerInputRef.current.value = '';
     }
   };
 
@@ -651,6 +675,68 @@ export const MobileStudioEditor: React.FC = () => {
             {/* TAB 2.5: STICKERS & PROPS */}
             {activeTab === 'stickers' && (
               <div className="space-y-2">
+                {/* Hidden File Input for Mobile Sticker Upload */}
+                <input
+                  ref={mobileStickerInputRef}
+                  type="file"
+                  accept="image/png,image/webp"
+                  onChange={handleMobileStickerUpload}
+                  className="hidden"
+                />
+
+                {/* Upload Button & Transparency Tip */}
+                <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => mobileStickerInputRef.current?.click()}
+                    disabled={isUploadingSticker}
+                    className="w-full py-1.5 px-2.5 rounded-lg bg-studio-charcoal text-white text-[10.5px] font-bold flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                  >
+                    {isUploadingSticker ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
+                        <span>Memproses Stiker...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImagePlus className="w-3 h-3 text-amber-300" />
+                        <span>+ Upload Stiker Sendiri (PNG)</span>
+                      </>
+                    )}
+                  </button>
+                  <div className="flex items-center gap-1 text-[9px] text-amber-900/90">
+                    <Info className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                    <span>Tips: Gunakan format PNG transparan agar menyatu rapi di atas foto.</span>
+                  </div>
+                </div>
+
+                {/* Uploaded User Custom Stickers Row (if any) */}
+                {customStickers.length > 0 && (
+                  <div className="space-y-0.5">
+                    <div className="flex items-center justify-between text-[9px] font-bold text-stone-600 uppercase tracking-wider px-0.5">
+                      <span>Stiker Kamu ({customStickers.length})</span>
+                      <span className="text-stone-400 font-normal">Ketuk untuk tempel</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                      {customStickers.map((cSticker) => (
+                        <button
+                          key={cSticker.id}
+                          type="button"
+                          onClick={() => addSticker(cSticker.id, cSticker.dataUrl)}
+                          className="w-10 h-10 p-1 rounded-xl border border-stone-200 bg-white hover:border-studio-graphite shrink-0 flex items-center justify-center active:scale-95 transition-all"
+                          title={`Tempel ${cSticker.name}`}
+                        >
+                          <img
+                            src={cSticker.dataUrl}
+                            alt={cSticker.name}
+                            className="w-full h-full object-contain pointer-events-none"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Category Tabs + Clear All */}
                 <div className="flex items-center justify-between gap-1.5">
                   <div className="grid grid-cols-4 gap-1 flex-1">

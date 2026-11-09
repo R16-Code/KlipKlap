@@ -3,7 +3,7 @@ import { Camera, RotateCcw, AlertCircle, ArrowLeftRight, Check, Sparkles, X, Fli
 import { useBoothStore } from '../../stores/useBoothStore';
 import { getLayoutDimensions, loadImage, renderPhotostripSync } from '../../utils/canvasComposer';
 import { LAYOUT_CONFIGS, getFittingLayout } from '../../utils/constants';
-import { preloadAllStickerImages } from '../../utils/stickers';
+import { preloadAllStickerImages, preloadPlacedStickers } from '../../utils/stickers';
 
 interface EditorCanvasProps {
   isDrawerOpen?: boolean;
@@ -152,6 +152,21 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
       isCurrent = false;
     };
   }, []);
+
+  // Preload any user-uploaded custom stickers dynamically
+  useEffect(() => {
+    let isCurrent = true;
+    if (placedStickers.some((s) => s.customDataUrl)) {
+      preloadPlacedStickers(placedStickers).then(() => {
+        if (isCurrent) {
+          setStickersLoadedKey((k) => k + 1);
+        }
+      });
+    }
+    return () => {
+      isCurrent = false;
+    };
+  }, [placedStickers]);
 
   // Pointer handlers for interactive sticker dragging, scaling & rotation
   const handleStickerPointerDown = (e: React.PointerEvent, stickerId: string) => {

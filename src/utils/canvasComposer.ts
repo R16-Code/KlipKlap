@@ -1,6 +1,6 @@
 import type { LayoutType, FilterType, CapturedPhoto, StudioSettings, CustomBackground, BackgroundPatternId, PlacedSticker } from '../types';
 import { FRAME_OPTIONS, LAYOUT_CONFIGS } from './constants';
-import { preloadAllStickerImages, getStickerImageMap } from './stickers';
+import { preloadAllStickerImages, getStickerImageMap, preloadPlacedStickers } from './stickers';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
@@ -1265,6 +1265,7 @@ export async function composePhotostrip(
 
   if (options.placedStickers && options.placedStickers.length > 0) {
     await preloadAllStickerImages();
+    await preloadPlacedStickers(options.placedStickers);
   }
 
   // Preload custom background image if upload mode
@@ -1409,6 +1410,7 @@ export async function downloadLiveMotionGIF(
 
   if (options.placedStickers && options.placedStickers.length > 0) {
     await preloadAllStickerImages();
+    await preloadPlacedStickers(options.placedStickers);
   }
 
   // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM
@@ -1750,6 +1752,7 @@ export async function downloadLiveMotionMP4(
 
   if (options.placedStickers && options.placedStickers.length > 0) {
     await preloadAllStickerImages();
+    await preloadPlacedStickers(options.placedStickers);
   }
 
   // 2. Reuse active in-DOM video elements if provided, or prepare active elements in DOM

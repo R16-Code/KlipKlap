@@ -87,6 +87,12 @@ export interface StickerDefinition {
   svgDataUrl: string;
 }
 
+export interface CustomSticker {
+  id: string;
+  name: string;
+  dataUrl: string;
+}
+
 export interface PlacedSticker {
   id: string;
   stickerId: string;
@@ -95,6 +101,7 @@ export interface PlacedSticker {
   scale: number; // Scale multiplier (0.4 to 2.5, default 1.0)
   rotation: number; // Degrees (-180 to 180, default 0)
   flipX?: boolean;
+  customDataUrl?: string; // Optional Base64 data URL for user-uploaded custom stickers
 }
 
 export interface FrameOption {

@@ -10,6 +10,7 @@ import type {
   StudioPreviewMode,
   CustomBackground,
   PlacedSticker,
+  CustomSticker,
 } from '../types';
 
 interface BoothState {
@@ -61,9 +62,11 @@ interface BoothState {
   customBackground: CustomBackground | null;
   setCustomBackground: (customBackground: CustomBackground | null) => void;
   placedStickers: PlacedSticker[];
+  customStickers: CustomSticker[];
   selectedStickerId: string | null;
   setSelectedStickerId: (id: string | null) => void;
-  addSticker: (stickerId: string) => void;
+  addSticker: (stickerId: string, customDataUrl?: string) => void;
+  addCustomSticker: (dataUrl: string, name?: string) => string;
   updateSticker: (id: string, patch: Partial<PlacedSticker>) => void;
   removeSticker: (id: string) => void;
   clearStickers: () => void;
@@ -244,6 +247,7 @@ export const useBoothStore = create<BoothState>((set, get) => ({
       selectedFrame: 'cloud_white',
       customBackground: null,
       placedStickers: [],
+      customStickers: [],
       selectedStickerId: null,
     });
   },
@@ -255,15 +259,17 @@ export const useBoothStore = create<BoothState>((set, get) => ({
   setCustomBackground: (customBackground) => set({ customBackground }),
 
   placedStickers: [],
+  customStickers: [],
   selectedStickerId: null,
   setSelectedStickerId: (selectedStickerId) => set({ selectedStickerId }),
-  addSticker: (stickerId) => {
+  addSticker: (stickerId, customDataUrl) => {
     set((state) => {
       const count = state.placedStickers.length;
       const offsetStep = ((count % 5) - 2) * 0.04;
       const newSticker: PlacedSticker = {
         id: `stk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         stickerId,
+        customDataUrl,
         x: Math.max(0.15, Math.min(0.85, 0.5 + offsetStep)),
         y: Math.max(0.15, Math.min(0.85, 0.45 + offsetStep)),
         scale: 1.0,
@@ -275,6 +281,20 @@ export const useBoothStore = create<BoothState>((set, get) => ({
         selectedStickerId: newSticker.id,
       };
     });
+  },
+  addCustomSticker: (dataUrl, name = 'Stiker Saya') => {
+    const newCustomId = `cst_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const customSticker: CustomSticker = {
+      id: newCustomId,
+      name,
+      dataUrl,
+    };
+    set((state) => ({
+      customStickers: [customSticker, ...state.customStickers],
+    }));
+    // Automatically place on photo frame immediately!
+    get().addSticker(newCustomId, dataUrl);
+    return newCustomId;
   },
   updateSticker: (id, patch) => {
     set((state) => ({

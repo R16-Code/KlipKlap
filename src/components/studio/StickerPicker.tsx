@@ -1,20 +1,36 @@
-import React, { useState } from 'react';
-import { Trash2, FlipHorizontal, RotateCw, RotateCcw, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Trash2,
+  FlipHorizontal,
+  RotateCw,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
+  Sparkles,
+  ImagePlus,
+  Loader2,
+  Info,
+} from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { STICKER_CATALOG } from '../../utils/stickers';
+import { optimizeStickerImage } from '../../utils/imageOptimizer';
 import type { StickerCategory } from '../../types';
 
 export const StickerPicker: React.FC = () => {
   const {
     placedStickers,
+    customStickers,
     selectedStickerId,
     addSticker,
+    addCustomSticker,
     updateSticker,
     removeSticker,
     clearStickers,
   } = useBoothStore();
 
   const [activeCategory, setActiveCategory] = useState<StickerCategory>('cute');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories: { id: StickerCategory; label: string }[] = [
     { id: 'cute', label: 'Cute 🎀' },
@@ -22,6 +38,27 @@ export const StickerPicker: React.FC = () => {
     { id: 'y2k', label: 'Y2K ✨' },
     { id: 'stamps', label: 'Stamps 🏷️' },
   ];
+
+  const handleUploadSticker = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      // Downscale to max 512px while keeping transparency alpha channel intact
+      const optimizedPng = await optimizeStickerImage(file, 512);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').slice(0, 16);
+      addCustomSticker(optimizedPng, cleanName || 'Stiker Saya');
+    } catch (err) {
+      console.error('Failed to upload custom sticker:', err);
+      alert('Gagal memproses gambar stiker. Pastikan file berformat PNG atau WebP.');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const filteredStickers = STICKER_CATALOG.filter((s) => s.category === activeCategory);
   const selectedSticker = placedStickers.find((s) => s.id === selectedStickerId);
@@ -31,6 +68,15 @@ export const StickerPicker: React.FC = () => {
 
   return (
     <div className="space-y-2.5 pt-2 border-t border-stone-200/60">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/webp"
+        onChange={handleUploadSticker}
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <label className="text-xs font-bold text-studio-graphite uppercase tracking-wider flex items-center gap-1">
@@ -50,6 +96,62 @@ export const StickerPicker: React.FC = () => {
           <span className="text-[10.5px] text-stone-500 font-medium">Klik untuk tempel</span>
         )}
       </div>
+
+      {/* Upload Custom Sticker Button & Transparency Notice Card */}
+      <div className="p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full py-2 px-3 rounded-xl bg-studio-charcoal hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-98 transition-all disabled:opacity-60"
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+              <span>Memproses Stiker Transparan...</span>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="w-3.5 h-3.5 text-amber-300" />
+              <span>+ Upload Stiker Sendiri (PNG)</span>
+            </>
+          )}
+        </button>
+
+        <div className="flex items-start gap-1.5 text-[10px] text-amber-900/90 leading-tight">
+          <Info className="w-3 h-3 text-amber-700 shrink-0 mt-0.5" />
+          <p>
+            Gunakan format <strong className="font-semibold text-amber-950">PNG transparan</strong> (tanpa latar belakang) agar stiker menyatu rapi di atas foto.
+          </p>
+        </div>
+      </div>
+
+      {/* Uploaded User Custom Stickers Row (if any) */}
+      {customStickers.length > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[10px] font-bold text-stone-600 uppercase tracking-wider px-0.5">
+            <span>Stiker Kamu ({customStickers.length})</span>
+            <span className="text-stone-400 font-normal">Klik untuk tempel lagi</span>
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+            {customStickers.map((cSticker) => (
+              <button
+                key={cSticker.id}
+                type="button"
+                onClick={() => addSticker(cSticker.id, cSticker.dataUrl)}
+                className="w-12 h-12 p-1 rounded-xl border border-stone-200 bg-white hover:border-studio-graphite hover:shadow-soft-sm shrink-0 flex items-center justify-center active:scale-95 transition-all"
+                title={`Tempel ${cSticker.name}`}
+              >
+                <img
+                  src={cSticker.dataUrl}
+                  alt={cSticker.name}
+                  className="w-full h-full object-contain pointer-events-none"
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Category Pills (4-Col Grid - Never Cut Off) */}
       <div className="grid grid-cols-4 gap-1 p-1 bg-stone-100/80 rounded-xl">
@@ -97,15 +199,15 @@ export const StickerPicker: React.FC = () => {
         <div className="p-2.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 min-w-0">
-              {selectedStickerDef && (
+              <div className="w-6 h-6 rounded-lg bg-white border border-stone-200 flex items-center justify-center shrink-0 overflow-hidden">
                 <img
-                  src={selectedStickerDef.svgDataUrl}
-                  alt={selectedStickerDef.name}
-                  className="w-5 h-5 object-contain shrink-0"
+                  src={selectedSticker.customDataUrl || selectedStickerDef?.svgDataUrl}
+                  alt={selectedStickerDef?.name || 'Stiker'}
+                  className="w-full h-full object-contain"
                 />
-              )}
+              </div>
               <span className="text-[11px] font-bold text-studio-graphite truncate">
-                Edit: {selectedStickerDef?.name || 'Stiker'}
+                Edit: {selectedSticker.customDataUrl ? 'Stiker Upload' : selectedStickerDef?.name || 'Stiker'}
               </span>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -182,4 +284,3 @@ export const StickerPicker: React.FC = () => {
     </div>
   );
 };
-
