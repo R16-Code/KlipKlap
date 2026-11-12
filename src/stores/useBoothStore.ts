@@ -14,6 +14,11 @@ import type {
 } from '../types';
 
 interface BoothState {
+  // Onboarding Welcome Guide
+  isGuideOpen: boolean;
+  openGuide: () => void;
+  closeGuide: (dontShowAgain?: boolean) => void;
+
   // Navigation
   currentStep: AppStep;
   setCurrentStep: (step: AppStep) => void;
@@ -92,7 +97,31 @@ const DEFAULT_SETTINGS: StudioSettings = {
   slotCalibration: DEFAULT_CALIBRATION,
 };
 
+const GUIDE_STORAGE_KEY = 'klipklap_guide_dismissed_v1';
+
+function getInitialGuideOpen(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(GUIDE_STORAGE_KEY) !== 'true';
+  } catch {
+    return true;
+  }
+}
+
 export const useBoothStore = create<BoothState>((set, get) => ({
+  isGuideOpen: getInitialGuideOpen(),
+  openGuide: () => set({ isGuideOpen: true }),
+  closeGuide: (dontShowAgain = false) => {
+    if (dontShowAgain && typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(GUIDE_STORAGE_KEY, 'true');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    set({ isGuideOpen: false });
+  },
+
   currentStep: 'booth',
   setCurrentStep: (step) => set({ currentStep: step }),
 

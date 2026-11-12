@@ -1,5 +1,6 @@
 import React from 'react';
 import { Header } from './components/common/Header';
+import { WelcomeGuideModal } from './components/common/WelcomeGuideModal';
 import { CameraView } from './components/booth/CameraView';
 import { ShutterControls } from './components/booth/ShutterControls';
 import { StripTray } from './components/booth/StripTray';
@@ -159,6 +160,9 @@ export const App: React.FC = () => {
           </>
         )}
       </main>
+
+      {/* Initial Step-by-Step User Guide Modal */}
+      <WelcomeGuideModal />
     </div>
   );
 };
