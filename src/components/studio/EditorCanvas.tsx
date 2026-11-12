@@ -28,6 +28,7 @@ interface DragState {
 export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const stageContainerRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const videoElementsRef = useRef<Map<number, HTMLVideoElement>>(new Map());
   const preloadedImagesRef = useRef<Map<number, HTMLImageElement>>(new Map());
@@ -35,6 +36,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
   const [imagesLoadedKey, setImagesLoadedKey] = useState<number>(0);
   const [bgLoadedKey, setBgLoadedKey] = useState<number>(0);
   const [stickersLoadedKey, setStickersLoadedKey] = useState<number>(0);
+  const [canvasDisplaySize, setCanvasDisplaySize] = useState<{ width: number; height: number } | null>(null);
 
   const {
     capturedPhotos,
@@ -167,6 +169,47 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
       isCurrent = false;
     };
   }, [placedStickers]);
+
+  // Dynamically fit photostrip canvas cleanly inside exact available stage dimensions
+  useEffect(() => {
+    const el = stageContainerRef.current;
+    if (!el) return;
+
+    const computeSize = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const dim = getLayoutDimensions(layout, 1);
+      const ratio = dim.width / dim.height;
+
+      const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 1024;
+      const maxW = isDesktop ? Math.min(rect.width - 16, 420) : Math.max(80, rect.width - 12);
+      const maxH = isDesktop
+        ? Math.min(rect.height - 12, window.innerHeight * 0.72)
+        : Math.max(80, rect.height - 8);
+
+      let dispW = maxH * ratio;
+      let dispH = maxH;
+      if (dispW > maxW) {
+        dispW = maxW;
+        dispH = dispW / ratio;
+      }
+
+      setCanvasDisplaySize({
+        width: Math.max(40, Math.floor(dispW)),
+        height: Math.max(40, Math.floor(dispH)),
+      });
+    };
+
+    computeSize();
+    const ro = new ResizeObserver(computeSize);
+    ro.observe(el);
+    window.addEventListener('resize', computeSize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', computeSize);
+    };
+  }, [layout, isDrawerOpen]);
 
   // Pointer handlers for interactive sticker dragging, scaling & rotation
   const handleStickerPointerDown = (e: React.PointerEvent, stickerId: string) => {
@@ -390,15 +433,15 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
   ]);
 
   return (
-    <div className="w-full min-h-full flex flex-col items-center justify-center p-1 sm:p-3 select-none relative overflow-y-auto lg:overflow-hidden no-scrollbar">
+    <div className="w-full h-full flex flex-col items-center justify-center p-1 sm:p-2 select-none relative overflow-hidden">
       {/* Background Studio Light Accent */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
         <div className="w-96 h-96 rounded-full bg-studio-blush/40 blur-3xl" />
       </div>
 
-      {/* Floating Missing Photos Notification Banner */}
+      {/* Floating Missing Photos Notification Banner (Desktop only; mobile has compact bottom alert bar) */}
       {isIncomplete && (
-        <div className="w-full max-w-xl mb-2 z-30 bg-amber-50/95 backdrop-blur-md border border-amber-300/80 rounded-2xl p-2.5 sm:px-4 sm:py-2 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-2 animate-in fade-in duration-200 shrink-0">
+        <div className="hidden lg:flex w-full max-w-xl mb-2 z-30 bg-amber-50/95 backdrop-blur-md border border-amber-300/80 rounded-2xl px-4 py-2 shadow-lg items-center justify-between gap-2 animate-in fade-in duration-200 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
               <AlertCircle className="w-3.5 h-3.5" />
@@ -445,31 +488,31 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
       )}
 
       {/* Top Preview Mode Switcher (Photo vs Live Motion) */}
-      <div className="z-20 flex items-center justify-center gap-2 mb-1.5 sm:mb-2 shrink-0">
-        <div className="flex items-center gap-1 bg-white/90 backdrop-blur-md p-1 rounded-2xl border border-black/[0.08] shadow-soft-sm">
+      <div className="z-20 flex items-center justify-center gap-2 mb-1 sm:mb-2 shrink-0">
+        <div className="flex items-center gap-1 bg-white/90 backdrop-blur-md p-0.5 sm:p-1 rounded-2xl border border-black/[0.08] shadow-soft-sm">
           <button
             type="button"
             onClick={() => setPreviewMode('photo')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all active:scale-95 ${
               previewMode === 'photo'
                 ? 'bg-studio-charcoal text-white shadow-soft-sm'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
             }`}
           >
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             <span>Foto Klasik</span>
           </button>
 
           <button
             type="button"
             onClick={() => setPreviewMode('motion')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all active:scale-95 ${
               previewMode === 'motion'
                 ? 'bg-studio-charcoal text-white shadow-soft-sm ring-1 ring-amber-400/40'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
             }`}
           >
-            <Sparkles className={`w-3.5 h-3.5 ${previewMode === 'motion' ? 'text-amber-300 animate-spin' : 'text-amber-500'}`} />
+            <Sparkles className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${previewMode === 'motion' ? 'text-amber-300 animate-spin' : 'text-amber-500'}`} />
             <span>Live Motion</span>
             {hasLiveMotion && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -478,9 +521,13 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
         </div>
       </div>
 
-      {/* Interactive Photo Reorder Bar (Positioned cleanly ABOVE the photostrip frame) */}
+      {/* Interactive Photo Reorder Bar (Hidden on mobile while bottom drawer is open so canvas stays huge) */}
       {capturedPhotos.length > 1 && (
-        <div className="z-20 bg-white/95 backdrop-blur-md border border-black/[0.08] rounded-2xl px-2.5 py-1 sm:px-3.5 sm:py-1.5 shadow-soft-sm flex items-center gap-1.5 sm:gap-2.5 mb-1 sm:mb-2 shrink-0 max-w-[95%]">
+        <div
+          className={`z-20 bg-white/95 backdrop-blur-md border border-black/[0.08] rounded-2xl px-2.5 py-1 sm:px-3.5 sm:py-1.5 shadow-soft-sm items-center gap-1.5 sm:gap-2.5 mb-1 sm:mb-2 shrink-0 max-w-[95%] ${
+            isDrawerOpen ? 'hidden lg:flex' : 'flex'
+          }`}
+        >
           <div className="flex items-center gap-1 sm:gap-1.5 text-studio-graphite shrink-0">
             <ArrowLeftRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-500" />
             <span className="text-[10px] sm:text-[11px] font-bold text-studio-graphite whitespace-nowrap">
@@ -558,9 +605,10 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
         </div>
       )}
 
-      {/* Photostrip Canvas Frame Wrapper (Realistic physical print feel) */}
+      {/* Photostrip Canvas Frame Wrapper (Measured dynamically so it NEVER overlaps headers or drawers) */}
       <div
-        className="relative z-10 flex-1 min-h-0 w-full flex items-center justify-center transition-all duration-300"
+        ref={stageContainerRef}
+        className="relative z-10 flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden"
         onClick={() => setSelectedStickerId(null)}
       >
         {/* Soft studio ambient drop shadow */}
@@ -568,12 +616,19 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({ isDrawerOpen = false
           <div ref={overlayRef} className="relative inline-block">
             <canvas
               ref={canvasRef}
-              className={`block w-auto object-contain transition-all duration-300 max-w-[85vw] sm:max-w-[340px] lg:max-w-[420px] ${
-                isDrawerOpen
-                  ? 'max-h-[35dvh] sm:max-h-[46dvh] lg:max-h-[66vh]'
-                  : 'max-h-[56dvh] sm:max-h-[62dvh] lg:max-h-[66vh]'
+              style={{
+                imageRendering: 'auto',
+                ...(canvasDisplaySize
+                  ? { width: `${canvasDisplaySize.width}px`, height: `${canvasDisplaySize.height}px` }
+                  : {}),
+              }}
+              className={`block object-contain ${
+                !canvasDisplaySize
+                  ? isDrawerOpen
+                    ? 'max-h-[30dvh] max-w-[85vw] lg:max-h-[66vh] lg:max-w-[420px]'
+                    : 'max-h-[54dvh] max-w-[85vw] lg:max-h-[66vh] lg:max-w-[420px]'
+                  : ''
               }`}
-              style={{ imageRendering: 'auto' }}
             />
 
             {/* Interactive Draggable / Resizable / Rotatable Sticker Overlay */}

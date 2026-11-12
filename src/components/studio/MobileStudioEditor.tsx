@@ -28,6 +28,7 @@ import {
   Move,
   ImagePlus,
   Info,
+  HelpCircle,
 } from 'lucide-react';
 import { useBoothStore } from '../../stores/useBoothStore';
 import { FRAME_OPTIONS, FILTER_OPTIONS, LAYOUT_CONFIGS, BACKGROUND_PATTERNS } from '../../utils/constants';
@@ -66,6 +67,7 @@ export const MobileStudioEditor: React.FC = () => {
     timerDuration,
     studioVideoElements,
     setIsExportingVideo: setGlobalIsExportingVideo,
+    openGuide,
   } = useBoothStore();
 
   const [activeTab, setActiveTab] = useState<'layouts' | 'frames' | 'stickers' | 'filters' | 'caption' | null>(null);
@@ -289,13 +291,13 @@ export const MobileStudioEditor: React.FC = () => {
   return (
     <div className="w-full h-full flex flex-col justify-between overflow-hidden select-none">
       {/* Top Mobile Bar */}
-      <header className="h-14 px-3 sm:px-4 bg-studio-milk/95 backdrop-blur-md border-b border-black/[0.06] flex items-center justify-between shrink-0 z-30">
+      <header className="h-12 px-3 sm:px-4 bg-studio-milk/95 backdrop-blur-md border-b border-black/[0.06] flex items-center justify-between shrink-0 z-30">
         <button
           type="button"
           onClick={() => setCurrentStep('booth')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 min-h-[40px] rounded-xl text-stone-700 hover:text-black font-semibold text-xs bg-white/80 border border-stone-200 shadow-soft-sm active:scale-95"
+          className="flex items-center gap-1 px-2.5 py-1 min-h-[36px] rounded-xl text-stone-700 hover:text-black font-semibold text-xs bg-white/80 border border-stone-200 shadow-soft-sm active:scale-95"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-3.5 h-3.5" />
           <span>Booth</span>
         </button>
 
@@ -308,45 +310,110 @@ export const MobileStudioEditor: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-stone-700 bg-white/90 border border-stone-200 shadow-soft-sm shrink-0">
-          <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
-          <span className="hidden xs:inline">100% Free Photobooth</span>
-          <span className="xs:hidden">100% Free</span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={openGuide}
+            className="w-8 h-8 rounded-xl text-stone-600 hover:text-studio-graphite bg-white/90 border border-stone-200 shadow-soft-sm flex items-center justify-center active:scale-95"
+            title="Lihat Panduan Penggunaan"
+            aria-label="Panduan"
+          >
+            <HelpCircle className="w-4 h-4 text-stone-600" />
+          </button>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-xl text-[11px] font-semibold text-stone-700 bg-white/90 border border-stone-200 shadow-soft-sm shrink-0">
+            <Heart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
+            <span className="hidden xs:inline">100% Free</span>
+            <span className="xs:hidden">Free</span>
+          </div>
         </div>
       </header>
 
-      {/* Center Viewport: Realistic Scaled Photostrip Canvas */}
-      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col items-center justify-start sm:justify-center p-2 relative overscroll-contain">
+      {/* Center Viewport: Dynamically Scaled Photostrip Canvas */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center p-1 sm:p-2 relative">
         <EditorCanvas isDrawerOpen={activeTab !== null} />
       </div>
 
       {/* Bottom Drawer & Tab Bar Container */}
       <div className="shrink-0 bg-white/95 backdrop-blur-lg border-t border-black/[0.08] shadow-soft-lg flex flex-col z-30">
+        {/* Hidden File Inputs for Frame Background & Custom Sticker Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/jpg"
+          onChange={handleMobileFileUpload}
+          className="hidden"
+        />
+        <input
+          ref={mobileStickerInputRef}
+          type="file"
+          accept="image/png,image/webp"
+          onChange={handleMobileStickerUpload}
+          className="hidden"
+        />
+
         {/* Expandable Drawer Panel (when a tab is selected) */}
         {activeTab !== null && (
-          <div className="p-3 border-b border-stone-200/70 max-h-44 sm:max-h-48 overflow-y-auto no-scrollbar animate-in slide-in-from-bottom duration-200">
-            {/* Tab Close Header */}
-            <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100">
-              <span className="text-xs font-bold text-studio-graphite uppercase tracking-wider font-sans">
+          <div className="border-b border-stone-200/70 flex flex-col max-h-[30dvh] sm:max-h-[34dvh] animate-in slide-in-from-bottom duration-200">
+            {/* Fixed Tab Close Header with Integrated Compact Upload Actions */}
+            <div className="px-3 py-1.5 border-b border-stone-100 flex items-center justify-between gap-2 shrink-0 bg-white/95">
+              <span className="text-[11px] font-bold text-studio-graphite uppercase tracking-wider font-sans truncate">
                 {activeTab === 'layouts'
                   ? 'Pilih Layout'
                   : activeTab === 'frames'
-                  ? 'Frame Color & Theme'
+                  ? 'Frame & Background'
                   : activeTab === 'stickers'
                   ? 'Stickers & Props'
                   : activeTab === 'filters'
                   ? 'Filter Preset'
-                  : 'Caption & Archive Stamp'}
+                  : 'Caption & Stamp'}
               </span>
-              <button
-                type="button"
-                onClick={() => setActiveTab(null)}
-                className="p-1 rounded-lg hover:bg-stone-100 text-stone-500"
-                title="Tutup drawer"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {activeTab === 'frames' && customBackground?.type !== 'upload' && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="px-2 py-1 rounded-lg bg-studio-charcoal text-white text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-3 h-3 text-amber-300" />
+                    )}
+                    <span>+ Upload BG</span>
+                  </button>
+                )}
+
+                {activeTab === 'stickers' && (
+                  <button
+                    type="button"
+                    onClick={() => mobileStickerInputRef.current?.click()}
+                    disabled={isUploadingSticker}
+                    className="px-2 py-1 rounded-lg bg-studio-charcoal text-white text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    {isUploadingSticker ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
+                    ) : (
+                      <ImagePlus className="w-3 h-3 text-amber-300" />
+                    )}
+                    <span>+ Upload PNG</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(null)}
+                  className="p-1 rounded-lg hover:bg-stone-100 text-stone-500"
+                  title="Tutup drawer"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+
+            {/* Scrollable Drawer Content */}
+            <div className="px-3 py-1.5 overflow-y-auto flex-1 min-h-0">
 
             {/* TAB 1: LAYOUTS */}
             {activeTab === 'layouts' && (
@@ -385,18 +452,9 @@ export const MobileStudioEditor: React.FC = () => {
             {/* TAB 2: FRAMES */}
             {activeTab === 'frames' && (
               <div className="space-y-2">
-                {/* Hidden File Input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/jpg"
-                  onChange={handleMobileFileUpload}
-                  className="hidden"
-                />
-
-                {/* Mobile Custom Upload Header / Card */}
-                <div className="p-2 rounded-xl bg-stone-50 border border-stone-200 shadow-soft-sm">
-                  {customBackground?.type === 'upload' ? (
+                {/* Mobile Custom Upload Preview Card (shown only after user uploads a custom background) */}
+                {customBackground?.type === 'upload' && (
+                  <div className="p-1.5 rounded-xl bg-stone-50 border border-stone-200 shadow-soft-sm">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-1.5">
                         <div className="flex items-center gap-2 min-w-0">
@@ -554,29 +612,8 @@ export const MobileStudioEditor: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                      className="w-full py-1.5 px-2.5 rounded-lg border border-dashed border-stone-300 hover:border-studio-graphite bg-white text-stone-700 flex items-center justify-center gap-2 active:scale-98 transition-all"
-                    >
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-studio-graphite" />
-                          <span className="text-[11px] font-semibold">Mengompres & Menyiapkan...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="w-3.5 h-3.5 text-stone-600" />
-                          <span className="text-[11px] font-bold text-studio-graphite">
-                            + Upload Background Foto Sendiri
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Category Pills (3-column grid so nothing gets cut off) */}
                 <div className="grid grid-cols-3 gap-1 pb-0.5">
@@ -585,7 +622,7 @@ export const MobileStudioEditor: React.FC = () => {
                       key={cat.id}
                       type="button"
                       onClick={() => setFrameCategory(cat.id)}
-                      className={`px-2 py-1 rounded-lg text-[10.5px] font-semibold text-center truncate transition-all ${
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold text-center truncate transition-all ${
                         frameCategory === cat.id
                           ? 'bg-studio-charcoal text-white shadow-soft-sm'
                           : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
@@ -614,14 +651,14 @@ export const MobileStudioEditor: React.FC = () => {
                               textColor: pattern.textColor,
                             })
                           }
-                          className={`p-2 rounded-xl border shrink-0 min-w-[90px] flex flex-col items-center gap-1 transition-all active:scale-95 ${
+                          className={`p-1.5 rounded-xl border shrink-0 min-w-[78px] flex flex-col items-center gap-0.5 transition-all active:scale-95 ${
                             isSelected
                               ? 'border-studio-graphite bg-white ring-1 ring-studio-graphite shadow-soft'
                               : 'border-stone-200 bg-stone-50'
                           }`}
                         >
                           <div
-                            className={`w-7 h-7 rounded-full shadow-inner flex items-center justify-center relative ${pattern.previewBg}`}
+                            className={`w-6 h-6 rounded-full shadow-inner flex items-center justify-center relative ${pattern.previewBg}`}
                           >
                             {isSelected && (
                               <Check
@@ -647,14 +684,14 @@ export const MobileStudioEditor: React.FC = () => {
                           key={frame.id}
                           type="button"
                           onClick={() => setSelectedFrame(frame.id)}
-                          className={`p-2 rounded-xl border shrink-0 min-w-[90px] flex flex-col items-center gap-1 transition-all active:scale-95 ${
+                          className={`p-1.5 rounded-xl border shrink-0 min-w-[78px] flex flex-col items-center gap-0.5 transition-all active:scale-95 ${
                             isSelected
                               ? 'border-studio-graphite bg-white ring-1 ring-studio-graphite shadow-soft'
                               : 'border-stone-200 bg-stone-50'
                           }`}
                         >
                           <div
-                            className="w-7 h-7 rounded-full shadow-inner border border-black/10 flex items-center justify-center relative"
+                            className="w-6 h-6 rounded-full shadow-inner border border-black/10 flex items-center justify-center relative"
                             style={{ backgroundColor: frame.color }}
                           >
                             {isSelected && <Check className="w-3.5 h-3.5 text-stone-900" />}
@@ -674,40 +711,11 @@ export const MobileStudioEditor: React.FC = () => {
 
             {/* TAB 2.5: STICKERS & PROPS */}
             {activeTab === 'stickers' && (
-              <div className="space-y-2">
-                {/* Hidden File Input for Mobile Sticker Upload */}
-                <input
-                  ref={mobileStickerInputRef}
-                  type="file"
-                  accept="image/png,image/webp"
-                  onChange={handleMobileStickerUpload}
-                  className="hidden"
-                />
-
-                {/* Upload Button & Transparency Tip */}
-                <div className="p-2 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => mobileStickerInputRef.current?.click()}
-                    disabled={isUploadingSticker}
-                    className="w-full py-1.5 px-2.5 rounded-lg bg-studio-charcoal text-white text-[10.5px] font-bold flex items-center justify-center gap-1.5 active:scale-98 transition-all"
-                  >
-                    {isUploadingSticker ? (
-                      <>
-                        <Loader2 className="w-3 h-3 animate-spin text-amber-300" />
-                        <span>Memproses Stiker...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ImagePlus className="w-3 h-3 text-amber-300" />
-                        <span>+ Upload Stiker Sendiri (PNG)</span>
-                      </>
-                    )}
-                  </button>
-                  <div className="flex items-center gap-1 text-[9px] text-amber-900/90">
-                    <Info className="w-2.5 h-2.5 text-amber-700 shrink-0" />
-                    <span>Tips: Gunakan format PNG transparan agar menyatu rapi di atas foto.</span>
-                  </div>
+              <div className="space-y-1.5">
+                {/* Transparency Tip */}
+                <div className="py-1 px-2 rounded-lg bg-amber-50/80 border border-amber-200/80 flex items-center gap-1.5 text-[9.5px] text-amber-900/90">
+                  <Info className="w-3 h-3 text-amber-700 shrink-0" />
+                  <span>Gunakan PNG latar transparan agar stiker menyatu rapi di foto.</span>
                 </div>
 
                 {/* Uploaded User Custom Stickers Row (if any) */}
@@ -775,22 +783,22 @@ export const MobileStudioEditor: React.FC = () => {
                 </div>
 
                 {/* Horizontal Sticker Catalog */}
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   {STICKER_CATALOG.filter((s) => s.category === stickerCategory).map((sticker) => (
                     <button
                       key={sticker.id}
                       type="button"
                       onClick={() => addSticker(sticker.id)}
-                      className="p-2 rounded-xl border border-stone-200 bg-stone-50 shrink-0 min-w-[76px] flex flex-col items-center gap-1 active:scale-95 transition-all"
+                      className="p-1.5 rounded-xl border border-stone-200 bg-stone-50 shrink-0 min-w-[66px] flex flex-col items-center gap-0.5 active:scale-95 transition-all"
                     >
-                      <div className="w-8 h-8 flex items-center justify-center">
+                      <div className="w-7 h-7 flex items-center justify-center">
                         <img
                           src={sticker.svgDataUrl}
                           alt={sticker.name}
                           className="w-full h-full object-contain pointer-events-none"
                         />
                       </div>
-                      <span className="text-[10px] font-semibold text-stone-700 truncate max-w-[70px]">
+                      <span className="text-[9.5px] font-semibold text-stone-700 truncate max-w-[60px]">
                         {sticker.name}
                       </span>
                     </button>
@@ -964,6 +972,7 @@ export const MobileStudioEditor: React.FC = () => {
                 </button>
               </div>
             )}
+            </div>
           </div>
         )}
 
@@ -972,7 +981,7 @@ export const MobileStudioEditor: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'layouts' ? null : 'layouts')}
-            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
+            className={`py-1.5 min-h-[42px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
               activeTab === 'layouts'
                 ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
                 : 'text-stone-500 hover:text-stone-800'
@@ -985,7 +994,7 @@ export const MobileStudioEditor: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'frames' ? null : 'frames')}
-            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
+            className={`py-1.5 min-h-[42px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
               activeTab === 'frames'
                 ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
                 : 'text-stone-500 hover:text-stone-800'
@@ -998,7 +1007,7 @@ export const MobileStudioEditor: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'stickers' ? null : 'stickers')}
-            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 relative ${
+            className={`py-1.5 min-h-[42px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 relative ${
               activeTab === 'stickers'
                 ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
                 : 'text-stone-500 hover:text-stone-800'
@@ -1007,7 +1016,7 @@ export const MobileStudioEditor: React.FC = () => {
             <Smile className="w-4 h-4" />
             <span className="text-[10px] tracking-tight">Stickers</span>
             {placedStickers.length > 0 && (
-              <span className="absolute top-1.5 right-3 w-3.5 h-3.5 rounded-full bg-studio-charcoal text-white text-[8px] font-bold flex items-center justify-center">
+              <span className="absolute top-1 right-2.5 w-3.5 h-3.5 rounded-full bg-studio-charcoal text-white text-[8px] font-bold flex items-center justify-center">
                 {placedStickers.length}
               </span>
             )}
@@ -1016,7 +1025,7 @@ export const MobileStudioEditor: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'filters' ? null : 'filters')}
-            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
+            className={`py-1.5 min-h-[42px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
               activeTab === 'filters'
                 ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
                 : 'text-stone-500 hover:text-stone-800'
@@ -1029,7 +1038,7 @@ export const MobileStudioEditor: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'caption' ? null : 'caption')}
-            className={`py-2.5 min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
+            className={`py-1.5 min-h-[42px] flex flex-col items-center justify-center gap-0.5 transition-colors active:scale-95 ${
               activeTab === 'caption'
                 ? 'text-studio-graphite font-bold bg-stone-100/70 border-b-2 border-studio-graphite'
                 : 'text-stone-500 hover:text-stone-800'
@@ -1041,7 +1050,7 @@ export const MobileStudioEditor: React.FC = () => {
         </div>
 
         {/* Pinned Bottom Primary Action Bar with Safe-Area Inset */}
-        <div className="p-3 pb-safe bg-white flex flex-col gap-1.5">
+        <div className="p-2 pb-safe bg-white flex flex-col gap-1">
           {isIncomplete && (
             <div className="flex items-center justify-between text-[11px] text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
               <span className="flex items-center gap-1 font-semibold">
@@ -1064,7 +1073,7 @@ export const MobileStudioEditor: React.FC = () => {
               type="button"
               disabled={isExporting || isExportingVideo}
               onClick={handleDownload}
-              className={`flex-1 py-3 min-h-[46px] px-2 rounded-2xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] ${
+              className={`flex-1 py-2 min-h-[42px] px-2 rounded-xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] ${
                 downloadSuccess
                   ? 'bg-emerald-600 text-white'
                   : 'bg-studio-charcoal text-white hover:bg-black'
@@ -1097,7 +1106,7 @@ export const MobileStudioEditor: React.FC = () => {
                   setIsMotionModalOpen(true);
                 }
               }}
-              className={`flex-1 py-3 min-h-[46px] px-2 rounded-2xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] border ${
+              className={`flex-1 py-2 min-h-[42px] px-2 rounded-xl text-xs font-bold tracking-tight uppercase flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] border ${
                 videoSuccess
                   ? 'bg-emerald-600 text-white border-emerald-600'
                   : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-950 border-amber-300/80'
